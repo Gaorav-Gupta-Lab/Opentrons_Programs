@@ -1,48 +1,47 @@
-# PCR Setup v0.1.0			Do NOT edit spacing, spelling, or word case.  Doing so will risk run failure!!!		
-# User:					
-# Run Date:					
+# Generic PCR Setup	 v0.2.0	Do NOT edit spacing, spelling, or word case.  Doing so will risk run failure!!!			
+# User:	Me	Any cell that is RED contains an error or needs a value			
+# Run Date:	14-Dec-2020				
 					
 					
-# Slot Assignments					
---Slot1	opentrons_96_tiprack_10ul				
---Slot2	opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap				
---Slot3	opentrons_96_tiprack_300ul				
---Slot4	opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap				
+# Slot Assignments	Labware				
+--Slot1	opentrons_24_tuberack_eppendorf_1.5ml_safelock_snapcap				
+--Slot2					
+--Slot3					
+--Slot4					
 --Slot5	stacked_96_well				
---Slot6	stacked_96_well				
+--Slot6					
 --Slot7					
 --Slot8					
 --Slot9					
---Slot10					
---Slot11					
+--Slot10	opentrons_96_tiprack_10ul				
+--Slot11	opentrons_96_tiprack_300ul				
 					
 					
 # Loaded Pipettes					
---LeftPipette	p10_single				
+--LeftPipette	p20_single_gen2				
 --RightPipette	p300_single_gen2				
 					
 					
 # Pipette Tip Racks					
---LeftPipetteTipRackSlot	1	Slot number.  Separate multiple with commas.  Example 1,2,3			
---RightPipetteTipRackSlot	3	Slot number.  Separate multiple with commas.  Example 1,2,4			
+--LeftPipetteTipRackSlot	10	Slot number.  Separate multiple with commas.  Example 1,2,3			
+--RightPipetteTipRackSlot	11	Slot number.  Separate multiple with commas.  Example 1,2,4			
 					
 					
 # Reagent Locations					
---ReagentSlot	2	Slot			
---Water	A1	Position			
---PCR_Mix	A2	Position			
+--ReagentSlot	1				
+--WaterWell	B1				
+--PCR_MixWell	B3	Always a 2x mix			
 					
+					
+# Global Sample Information					
+--DNA_in_Reaction	100.0	ng			
+--PCR_Volume	100.0	uL			
+--WaterControl	5,B3	Enter as slot,position.  For example 4,A7			
 					
 					
 # Sample Information					
-					
---DNA_in_Reaction	100.0	ng			
---PCR_Volume	100.0	uL			
---WaterControl	4,A7	Enter as slot,position.  For example 4,A7			
-					
-					
 # Source Slot	Source Well	Sample	Concentration ng/uL	Destination Slot	Destination Well
-4	A1	some DNA	2.5	6	A1
-4	A2	More DNA	1.3	6	A2
-4	A3	Stuff	1	6	A3
-4	A4	Stuff	10.7	6	A4
+1	A1	s1	2.0	5	A1
+1	A2	s2	3.7	5	A2
+1	A3	s3	2.9	5	A3
+1	A4	s4	6.4	5	A4
