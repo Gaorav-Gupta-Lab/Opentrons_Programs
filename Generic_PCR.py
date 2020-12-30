@@ -1,17 +1,16 @@
 import csv
 import os
 import math
-from contextlib import suppress
-import natsort
+import time
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
-from opentrons import protocol_api
-import opentrons
+# from opentrons import protocol_api
+# import opentrons
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.3.1',
+    'protocolName': 'Generic PCR v0.3.3',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.8'
@@ -100,25 +99,28 @@ def load_tipracks(protocol, tiprack_list, labware_dict):
     return tiprack_labware
 
 
-def res_tip_height(res_vol, well_dia):
-
-    height = (res_vol/(math.pi*((well_dia/2)**2)))-5
-    if height <= 2:
-        height = 2
-
-    return height
-
-
-def pcr_tip_height(vol):
-    height = math.log2(vol/(3.14159*((1.8/2)**2)))*2.5
-
-    if height >= 1:
-        return height
+def res_tip_height(res_vol, well_dia, cone_vol):
+    """
+    Calculate the the height of the liquid in a conical tube and return the value to set the pipette tip height.
+    @param res_vol:
+    @param well_dia:
+    @param cone_vol:
+    @return:
+    """
+    if res_vol > cone_vol:
+        cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
+        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-9+cone_height
     else:
-        return 1
+        height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 3
+
+    if height <= 10:
+        height = 1
+
+    return int(height)
 
 
-def run(protocol: protocol_api.ProtocolContext):
+def run(ctx):
+    protocol = ctx
     # TSV file location on OT-2
     tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
     if not os.path.isfile(tsv_file_path):
@@ -129,6 +131,8 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Turn on rail lights and pause program so user can load robot deck.
     protocol.set_rail_lights(True)
+    protocol.home()
+    time.sleep(1)
     protocol.pause("Load Labware onto robot deck and click resume when ready to continue")
     protocol.set_rail_lights(False)
 
@@ -160,10 +164,6 @@ def run(protocol: protocol_api.ProtocolContext):
     # Dispense PCR Reagents.
     dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remaining_water_vol, sample_dest_dict)
 
-    # Delete the TSV file from the OT-2 before finishing
-    with suppress(FileNotFoundError):
-        os.remove(tsv_file_path)
-
 
 def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remaining_water_vol, sample_dest_dict):
     """
@@ -183,8 +183,8 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remai
     reagent_labware = labware_dict[args.ReagentSlot]
 
     pcr_reagent_well_dia = reagent_labware[args.PCR_MixWell].diameter
-    trigger_vol = height_adjust_trigger(args, reagent_labware)
-    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reagent_well_dia)
+    trigger_vol, cone_vol = height_adjust_trigger(args, reagent_labware)
+    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reagent_well_dia, cone_vol)
     incremental_aspirated_vol = 0
     reagent_aspirated = 0
 
@@ -195,7 +195,7 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remai
         destination_labware = labware_dict[destination_slot]
         destination_well_list = sample_dest_dict[destination_slot]
 
-        for destination_well in natsort.natsorted(destination_well_list):
+        for destination_well in destination_well_list:
             reagent_pipette.pick_up_tip()
             temp_pcr_loop = pcr_loop
 
@@ -204,10 +204,8 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remai
                 reagent_pipette.dispense(pcr_reagent_vol, destination_labware[destination_well])
                 incremental_aspirated_vol += pcr_reagent_vol
                 reagent_aspirated += pcr_reagent_vol
-
-                if incremental_aspirated_vol > trigger_vol:
-                    tip_height = res_tip_height(float(args.PCR_MixResVolume)-reagent_aspirated, pcr_reagent_well_dia)
-                    incremental_aspirated_vol = 0
+                tip_height = \
+                    res_tip_height(float(args.PCR_MixResVolume) - reagent_aspirated, pcr_reagent_well_dia, cone_vol)
 
                 temp_pcr_loop -= 1
 
@@ -217,7 +215,8 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remai
     # Setup the water control sample(s)
     if args.WaterControl:
         water_reservoir_dia = reagent_labware[args.WaterWell].diameter
-        water_tip_height = res_tip_height(float(args.PCR_MixResVolume) - remaining_water_vol, water_reservoir_dia)
+        water_tip_height = \
+            res_tip_height(float(args.PCR_MixResVolume) - remaining_water_vol, water_reservoir_dia, cone_vol)
         slot = args.WaterControl.split(',')[0]
         well = args.WaterControl.split(',')[1]
         neg_control_labware = labware_dict[slot]
@@ -241,15 +240,18 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remai
 
 def height_adjust_trigger(args, labware_name):
     trigger_vol = 200
+    cone_vol = 200
     labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
 
     if "5ml_" in labware:
-        trigger_vol = 300
+        trigger_vol = 500
+        cone_vol = 1200
 
     elif"1.5ml" in labware:
-        trigger_vol = 150
+        trigger_vol = 225
+        cone_vol = 500
 
-    return trigger_vol
+    return trigger_vol, cone_vol
 
 
 def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_pipette):
@@ -267,8 +269,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     reaction_vol = float(args.PCR_Volume)
     reagent_labware = labware_dict[args.ReagentSlot]
     water_reservoir_dia = reagent_labware[args.WaterWell].diameter
-    trigger_vol = height_adjust_trigger(args, reagent_labware)
-    tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia)
+    trigger_vol, cone_vol = height_adjust_trigger(args, reagent_labware)
+    tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol)
     incremental_aspirated_vol = 0
     aspirated_vol = 0
 
@@ -315,10 +317,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
                 aspirated_vol += water_volume
                 incremental_aspirated_vol += water_volume
 
-                # Adjust tip height from tube bottom if necessary.
-                if incremental_aspirated_vol > trigger_vol:
-                    tip_height = res_tip_height(float(args.WaterResVol)-aspirated_vol, water_reservoir_dia)
-                    incremental_aspirated_vol = 0
+                # Adjust tip height from tube bottom.
+                tip_height = res_tip_height(float(args.WaterResVol)-aspirated_vol, water_reservoir_dia, cone_vol)
 
                 temp_water_loop -= 1
 
@@ -345,11 +345,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
 
 if __name__ == "__main__":
     protocol_file = open('Generic_PCR.py')
-    labware_path = "D:{}custom_labware".format(os.sep)
-    if not os.path.isdir(labware_path):
-        labware_path = \
-            "C:/Users/g2che/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs/custom_labware/"
-
+    labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
     print(format_runlog(run_log))
     protocol_file.close()
