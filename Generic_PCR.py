@@ -1,7 +1,6 @@
 import csv
 import os
 import math
-import time
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
@@ -10,7 +9,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.3.3',
+    'protocolName': 'Generic PCR v0.3.4',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.8'
@@ -120,7 +119,7 @@ def res_tip_height(res_vol, well_dia, cone_vol):
 
 
 def run(ctx):
-    protocol = ctx
+
     # TSV file location on OT-2
     tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
     if not os.path.isfile(tsv_file_path):
@@ -130,11 +129,11 @@ def run(ctx):
     sample_parameters, args = parse_sample_file(tsv_file_path)
 
     # Turn on rail lights and pause program so user can load robot deck.
-    protocol.set_rail_lights(True)
-    protocol.home()
-    time.sleep(1)
-    protocol.pause("Load Labware onto robot deck and click resume when ready to continue")
-    protocol.set_rail_lights(False)
+    ctx.set_rail_lights(True)
+    # ctx.delay(seconds=60)
+    ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
+    ctx.home()
+    ctx.set_rail_lights(False)
 
     # Extract Slot information
     slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
@@ -143,19 +142,19 @@ def run(ctx):
         labware = getattr(args, "{}".format(slot_list[i]))
 
         if labware:
-            labware_dict[str(i+1)] = protocol.load_labware(labware, str(i+1))
+            labware_dict[str(i+1)] = ctx.load_labware(labware, str(i+1))
 
     # Pipette Tip Boxes
     left_tipracks = ""
     right_tipracks = ""
     if args.LeftPipetteTipRackSlot:
-        left_tipracks = load_tipracks(protocol, args.LeftPipetteTipRackSlot.split(","), labware_dict)
+        left_tipracks = load_tipracks(ctx, args.LeftPipetteTipRackSlot.split(","), labware_dict)
     if args.RightPipetteTipRackSlot:
-        right_tipracks = load_tipracks(protocol, args.RightPipetteTipRackSlot.split(","), labware_dict)
+        right_tipracks = load_tipracks(ctx, args.RightPipetteTipRackSlot.split(","), labware_dict)
 
     # Pipettes
-    left_pipette = protocol.load_instrument(args.LeftPipette, 'left', tip_racks=left_tipracks)
-    right_pipette = protocol.load_instrument(args.RightPipette, 'right', tip_racks=right_tipracks)
+    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tipracks)
+    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tipracks)
 
     # Dispense Samples
     sample_dest_dict, remaining_water_vol = \
@@ -163,6 +162,9 @@ def run(ctx):
 
     # Dispense PCR Reagents.
     dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remaining_water_vol, sample_dest_dict)
+
+    if not ctx.is_simulating():
+        os.remove(tsv_file_path)
 
 
 def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remaining_water_vol, sample_dest_dict):
