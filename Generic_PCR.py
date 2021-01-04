@@ -18,7 +18,7 @@ metadata = {
 
 def parse_sample_file(input_file):
     """
-    Parse the TSV file and return data objects to main def.
+    Parse the TSV file and return data objects to run def.
     @param input_file:
     @return:
     """
@@ -33,7 +33,6 @@ def parse_sample_file(input_file):
         sample_key = ""
         if col_count > 0 and "#" not in line[0] and len(line[0].split("#")[0]) > 0:
             # Skip any lines that are blank or comments.
-
             for i in range(6):
                 try:
                     line[i] = line[i].split("#")[0]  # Strip out end of line comments and white space.
@@ -130,7 +129,6 @@ def run(ctx):
 
     # Turn on rail lights and pause program so user can load robot deck.
     ctx.set_rail_lights(True)
-    # ctx.delay(seconds=60)
     ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
     ctx.home()
     ctx.set_rail_lights(False)
