@@ -4,12 +4,11 @@ import math
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
-# from opentrons import protocol_api
 # import opentrons
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.3.4',
+    'protocolName': 'Generic PCR v0.4.0',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.8'
@@ -154,6 +153,10 @@ def run(ctx):
     left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tipracks)
     right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tipracks)
 
+    # Set the location of the first tip in box.
+    left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip]
+    right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip]
+
     # Dispense Samples
     sample_dest_dict, remaining_water_vol = \
         dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_pipette)
@@ -189,7 +192,7 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, remai
     reagent_aspirated = 0
 
     # Add PCR Reagents
-    mix_vol = float(args.PCR_Volume) * 0.80
+    mix_vol = float(args.PCR_Volume) * 0.70
 
     for destination_slot in sample_dest_dict:
         destination_labware = labware_dict[destination_slot]
