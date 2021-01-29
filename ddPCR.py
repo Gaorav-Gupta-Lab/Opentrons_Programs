@@ -2,6 +2,7 @@ import csv
 import datetime
 import math
 import os
+import platform
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
@@ -9,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.1.2',
+    'protocolName': 'ddPCR v0.2.0',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
@@ -199,7 +200,7 @@ def calculate_volumes(args, sample_concentration):
     # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
     if sample_concentration <= target_concentration:
         sample_vol = template_in_reaction/sample_concentration
-        return 0, 0, sample_vol, max_template_vol-sample_vol, max_template_vol
+        return 0, 0, sample_vol, round(max_template_vol-sample_vol, 2), max_template_vol
 
     # This will test a series of dilutions up to a 1:200.
     for i in range(50):
@@ -221,9 +222,12 @@ def sample_processing(args, sample_parameters):
     target_well_dict = defaultdict(list)
     water_well_dict = defaultdict(float)
     layout_data = defaultdict(list)
+    all_data_dict = defaultdict(list)
 
+    # Builds the data frame for printing the plate layout file
     for k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
         layout_data[k] = ['', '', '', '', '', '', '', '', '', '', '', '', ]
+
     plate_layout_by_column = plate_layout()
     used_wells = []
     dest_well_count = 0
@@ -241,12 +245,14 @@ def sample_processing(args, sample_parameters):
         for target in targets:
             for i in range(replicates):
                 well = plate_layout_by_column[dest_well_count]
+                row = well[0]
+                column = int(well[1:])-1
+
                 try:
                     dilution = "1:{}".format(int((sample_vol+diluent_vol)/sample_vol))
                 except ZeroDivisionError:
                     dilution = "Neat"
-                row = well[0]
-                column = int(well[1:])-1
+
                 layout_data[row][column] = "{}|{}|{}|{}"\
                     .format(sample_string, getattr(args, "Target_{}".format(target)).split(",")[2],
                             dilution, diluted_sample_vol)
@@ -261,7 +267,8 @@ def sample_processing(args, sample_parameters):
         no_primer_well = plate_layout_by_column[dest_well_count]
         used_wells.append(no_primer_well)
         sample_wells.append(no_primer_well)
-        water_well_dict[no_primer_well] = float(args.TargetVolume)
+        water_vol = float(args.TargetVolume)+(max_template_vol-diluted_sample_vol)
+        water_well_dict[no_primer_well] = water_vol
         sample_data_dict[sample_key] = [sample_vol, diluent_vol, diluted_sample_vol, sample_wells]
         water_row = no_primer_well[0]
         water_column = int(no_primer_well[1:])-1
@@ -335,10 +342,10 @@ def run(ctx):
     sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data = \
         sample_processing(args, sample_parameters)
 
-    # This will output a plate layout file.  Only does it during the simulation
-    if ctx.is_simulating:
+    # This will output a plate layout file.  Only does it during the simulation from our GUI
+    if ctx.is_simulating():
         # if not os.path.isdir("C:{0}Users{0}{1}{0}Documents".format(os.sep, os.getlogin())):
-        if not os.path.isfile(tsv_file_path):
+        if platform.system() == "Windows":
             run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
 
             header = "## ddPCR Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
