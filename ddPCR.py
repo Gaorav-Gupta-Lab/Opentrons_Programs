@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.2.0',
+    'protocolName': 'ddPCR v0.2.2',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
@@ -222,7 +222,6 @@ def sample_processing(args, sample_parameters):
     target_well_dict = defaultdict(list)
     water_well_dict = defaultdict(float)
     layout_data = defaultdict(list)
-    all_data_dict = defaultdict(list)
 
     # Builds the data frame for printing the plate layout file
     for k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
@@ -291,11 +290,12 @@ def sample_processing(args, sample_parameters):
 
             if template == "Water":
                 water_well_dict[well] = max_template_vol
+
             template = "Water"
             dest_well_count += 1
             loop_count -= 1
 
-    return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data
+    return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
 
 
 def run(ctx):
@@ -339,7 +339,7 @@ def run(ctx):
     left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip]
     right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip]
 
-    sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data = \
+    sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol = \
         sample_processing(args, sample_parameters)
 
     # This will output a plate layout file.  Only does it during the simulation from our GUI
@@ -367,7 +367,7 @@ def run(ctx):
 
     positive_control_dict = dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
     dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette, water_aspirated)
-    dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette)
+    dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette, max_template_vol)
     dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells)
 
     if not ctx.is_simulating():
@@ -399,8 +399,8 @@ def dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, righ
         if not target_pipette.has_tip:
             target_pipette.pick_up_tip()
 
-        # The last well in the list is the positive control for the target primers
-        pos_control_well = target_well_list[-1]
+        # The penultimate well in the list is the positive control for the target primers
+        pos_control_well = target_well_list[-2]
         pos_control_info = getattr(args, "PositiveControl_{}".format(target))
         positive_control_dict[pos_control_well] = pos_control_info
 
@@ -505,9 +505,9 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
 
         # Adjust volume of diluted sample to make sure there is enough
         volume_ratio = (undiluted_sample_vol + diluent_vol) / (len(sample_dest_wells) * diluted_sample_vol)
-        if volume_ratio < 1:
-            undiluted_sample_vol = undiluted_sample_vol / volume_ratio
-            diluent_vol = diluent_vol / volume_ratio
+        if volume_ratio < 1.7:
+            undiluted_sample_vol = undiluted_sample_vol*4
+            diluent_vol = diluent_vol*4
 
         # Reset the pipettes for the new volumes
         diluent_pipette, diluent_loop, diluent_vol = pipette_selection(left_pipette, right_pipette, diluent_vol)
@@ -519,7 +519,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
         dispensing_loop(args, diluent_loop, diluent_pipette, reagent_labware[args.WaterWell].bottom(water_tip_height),
                         dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=False)
         dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                        dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=True)
+                        dilution_labware[dilution_well], undiluted_sample_vol, NewTip=True, MixReaction=True)
         water_aspirated += diluent_vol
         water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
 
@@ -528,13 +528,13 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
             sample_pipette, sample_loop, diluted_sample_vol = \
                 pipette_selection(left_pipette, right_pipette, diluted_sample_vol)
 
-            dispensing_loop(args, sample_loop, sample_pipette, dilution_labware[dilution_well],
+            dispensing_loop(args, sample_loop, sample_pipette, dilution_labware[dilution_well].bottom(0.1),
                             sample_destination_labware[well], diluted_sample_vol, NewTip=True, MixReaction=False)
         if sample_pipette.has_tip:
             sample_pipette.drop_tip()
 
 
-def dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette):
+def dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette, max_template_vol):
     """
     Dispense positive controls to appropriate wells
     @param args:
@@ -542,14 +542,14 @@ def dispense_positive_controls(args, positive_control_dict, labware_dict, left_p
     @param labware_dict:
     @param left_pipette:
     @param right_pipette:
+    @param max_template_vol:
     """
 
     sample_destination_labware = labware_dict[args.PCR_PlateSlot]
 
     for destination_well in positive_control_dict:
         positive_control_info = positive_control_dict[destination_well].split(",")
-        control_sample_vol = float(args.TargetVolume) + (
-                float(args.PCR_Volume) / int(args.PCR_MixConcentration.split("x")[0]))
+        control_sample_vol = max_template_vol
 
         # There is a bug in the Opentrons software that results in a 0 uL aspiration defaulting to pipette max.
         if control_sample_vol < 0.4:
