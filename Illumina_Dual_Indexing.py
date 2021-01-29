@@ -8,7 +8,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v0.3.0',
+    'protocolName': 'Illumina Dual Indexing v0.4.0',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
     'apiLevel': '2.8'
@@ -85,10 +85,10 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
     pcr_reagent_labware = labware_dict[args.ReagentSlot]
     pcr_reagent_well = args.PCR_MixWell
     reagent_labware = labware_dict[args.ReagentSlot]
-    water_reservoir_dia = reagent_labware[args.WaterWell].diameter
-    trigger_vol, cone_vol = height_adjust_trigger(args, reagent_labware)
-    tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol)
-    pcr_pipette, pcr_loop, pcr_reagent_vol = sample_pipette_selection(left_pipette, right_pipette, pcr_reagent_vol)
+    pcr_reservoir_dia = reagent_labware[args.PCR_MixWell].diameter
+    cone_vol = labware_cone_volume(args, reagent_labware)
+    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reservoir_dia, cone_vol)
+    pcr_pipette, pcr_loop, pcr_reagent_vol = pipette_selection(left_pipette, right_pipette, pcr_reagent_vol)
     aspirated_vol = 0
 
     for sample_key in sample_dest_dict:
@@ -98,14 +98,16 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
 
         pcr_pipette = \
             dispensing_loop(args, pcr_loop, pcr_pipette, pcr_reagent_labware[pcr_reagent_well].bottom(tip_height),
-                        sample_destination_labware[sample_dest_well], pcr_reagent_vol, NewTip=True, MixReaction=True)
+                            sample_destination_labware[sample_dest_well], pcr_reagent_vol,
+                            NewTip=True, MixReaction=True)
 
         aspirated_vol += pcr_reagent_vol
 
-        tip_height = res_tip_height(float(args.WaterResVol)-aspirated_vol, water_reservoir_dia, cone_vol)
+        tip_height = res_tip_height(float(args.PCR_MixResVolume)-aspirated_vol, pcr_reservoir_dia, cone_vol)
 
 
-def sample_pipette_selection(left_pipette, right_pipette, volume):
+
+def pipette_selection(left_pipette, right_pipette, volume):
     """
     Function to select pipette based on expected volumes.  Will also adjust volume is pipette needs to pick up >1x
     @param left_pipette:
@@ -137,7 +139,8 @@ def sample_pipette_selection(left_pipette, right_pipette, volume):
 
 def res_tip_height(res_vol, well_dia, cone_vol):
     """
-    Calculate the the height of the liquid in a conical tube and return the value to set the pipette tip height.
+    Calculate the the height of the liquid in a reservoir and return the value to set the pipette tip height.
+    This works for both conical shapes and cylinders.
     @param res_vol:
     @param well_dia:
     @param cone_vol:
@@ -155,20 +158,23 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     return int(height)
 
 
-def height_adjust_trigger(args, labware_name):
-    trigger_vol = 200
+def labware_cone_volume(args, labware_name):
+    """
+    Based on the labware and reservoir return the volume at which the cylinder shape transitions to the conical shape.
+    @param args:
+    @param labware_name:
+    @return:
+    """
     cone_vol = 200
     labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
 
     if "e5ml_" in labware:
-        trigger_vol = 500
         cone_vol = 1200
 
     elif"1.5ml_24" in labware:
-        trigger_vol = 225
         cone_vol = 500
 
-    return trigger_vol, cone_vol
+    return cone_vol
 
 
 def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_pipette):
@@ -196,9 +202,9 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     reaction_vol = float(args.PCR_Volume)
     reagent_labware = labware_dict[args.ReagentSlot]
     water_reservoir_dia = reagent_labware[args.WaterWell].diameter
-    trigger_vol, cone_vol = height_adjust_trigger(args, reagent_labware)
+    cone_vol = labware_cone_volume(args, reagent_labware)
     tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol)
-    aspirated_vol = 0
+    aspirated_water_vol = 0
 
     # First pipette water into each well.
     sample_dest_dict = defaultdict(list)
@@ -215,14 +221,10 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         else:
             sample_volume = round(sample_volume_needed, 2)
 
-        initial_water_volume = (0.5*reaction_vol)-sample_volume
-        if initial_water_volume > 20:
-            water_volume = round((0.5*reaction_vol)-sample_volume, 1)
-        else:
-            water_volume = round((0.5 * reaction_vol) - sample_volume, 1)
+        water_volume = (0.5*reaction_vol)-sample_volume
 
-        # Define the pipettes for dispensing our samples and the water.
-        water_pipette, water_loop, water_volume = sample_pipette_selection(left_pipette, right_pipette, water_volume)
+        # Define the pipette for dispensing the water.
+        water_pipette, water_loop, water_volume = pipette_selection(left_pipette, right_pipette, water_volume)
 
         sample_dest_dict[sample_key].append((sample_dest_slot, sample_dest_well, sample_volume))
 
@@ -231,8 +233,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             water_pipette.pick_up_tip()
         dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(tip_height),
                         sample_destination_labware[sample_dest_well], water_volume, NewTip=False, MixReaction=False)
-        aspirated_vol += water_volume
-        tip_height = res_tip_height(float(args.WaterResVol) - aspirated_vol, water_reservoir_dia, cone_vol)
+        aspirated_water_vol += water_volume
+        tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
 
     # Drop any tips the pipettes might have.
     left_pipette.drop_tip()
@@ -251,7 +253,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         sample_volume = sample_dest_dict[sample_key][0][2]
 
         sample_pipette, sample_loop, sample_volume = \
-            sample_pipette_selection(left_pipette, right_pipette, sample_volume)
+            pipette_selection(left_pipette, right_pipette, sample_volume)
 
         # Add template to the destination well for this sample.
         dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
@@ -260,7 +262,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         # Determine primer volumes and dispense them.
         primer_volume = (float(args.PCR_Volume)/50) * 1.25
         primer_pipette, primer_loop, primer_volume = \
-            sample_pipette_selection(left_pipette, right_pipette, primer_volume)
+            pipette_selection(left_pipette, right_pipette, primer_volume)
 
         # D500 primers
         dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d500]],
@@ -339,6 +341,9 @@ def run(ctx):
 
     # Add PCR mix to each destination well.
     add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipette)
+
+    if not ctx.is_simulating():
+        os.remove(tsv_file_path)
 
 
 if __name__ == "__main__":
