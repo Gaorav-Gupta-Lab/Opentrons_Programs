@@ -9,7 +9,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.1.0',
+    'protocolName': 'ddPCR v0.1.2',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
@@ -107,11 +107,11 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     """
     if res_vol > cone_vol:
         cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
-        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-9+cone_height
+        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-6+cone_height
     else:
         height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 4
 
-    if height <= 8:
+    if height <= 6:
         height = 1
 
     return int(height)
@@ -337,7 +337,8 @@ def run(ctx):
 
     # This will output a plate layout file.  Only does it during the simulation
     if ctx.is_simulating:
-        if os.path.isdir("C:{0}Users{0}{1}{0}Documents".format(os.sep, os.getlogin())):
+        # if not os.path.isdir("C:{0}Users{0}{1}{0}Documents".format(os.sep, os.getlogin())):
+        if not os.path.isfile(tsv_file_path):
             run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
 
             header = "## ddPCR Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
@@ -356,6 +357,7 @@ def run(ctx):
             outfile.close()
 
     water_aspirated = dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipette)
+
     positive_control_dict = dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
     dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette, water_aspirated)
     dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette)
@@ -442,7 +444,12 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
         dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(water_tip_height),
                         sample_destination_labware[well], water_volume, NewTip=False, MixReaction=False)
         water_aspirated += water_volume
-        water_tip_height = res_tip_height(water_aspirated, water_res_well_dia, cone_vol)
+        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+
+    if left_pipette.has_tip:
+        left_pipette.drop_tip()
+    if right_pipette.has_tip:
+        right_pipette.drop_tip()
 
     return water_aspirated
 
@@ -507,7 +514,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
         dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
                         dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=True)
         water_aspirated += diluent_vol
-        water_tip_height = res_tip_height(water_aspirated, water_res_well_dia, cone_vol)
+        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
 
         # Add diluted sample to PCR plate
         for well in sample_dest_wells:
@@ -583,7 +590,7 @@ def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_well
                         NewTip=True, MixReaction=True)
 
         supermix_aspirated += supermix_vol
-        supermix_tip_height = res_tip_height(supermix_aspirated, supermix_well_dia, cone_vol)
+        supermix_tip_height = res_tip_height(float(args.PCR_MixResVolume)-supermix_aspirated, supermix_well_dia, cone_vol)
 
 
 if __name__ == "__main__":
