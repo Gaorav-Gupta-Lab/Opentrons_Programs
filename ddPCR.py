@@ -3,6 +3,7 @@ import datetime
 import math
 import os
 import platform
+from contextlib import suppress
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
@@ -10,12 +11,11 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.2.2',
+    'protocolName': 'ddPCR v0.3.0',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
 }
-
 
 def parse_sample_file(input_file):
     """
@@ -123,7 +123,7 @@ def labware_cone_volume(args, labware_name):
     cone_vol = 200
     labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
 
-    if "5ml_" in labware:
+    if "e5ml_" in labware:
 
         cone_vol = 1200
 
@@ -156,6 +156,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
     @param MixReaction:
     @return:
     """
+
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
@@ -336,8 +337,11 @@ def run(ctx):
     right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tipracks)
 
     # Set the location of the first tip in box.
-    left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip]
-    right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip]
+    with suppress(IndexError):
+        left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip]
+
+    with suppress(IndexError):
+        right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip]
 
     sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol = \
         sample_processing(args, sample_parameters)
@@ -477,7 +481,8 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
     reagent_labware = labware_dict[args.ReagentSlot]
     water_res_well_dia = reagent_labware[args.WaterWell].diameter
     cone_vol = labware_cone_volume(args, reagent_labware)
-    water_tip_height = res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol)
+
+    water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
     dilution_plate_layout = plate_layout()
     dilution_well_index = 0
 
@@ -521,6 +526,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
         dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
                         dilution_labware[dilution_well], undiluted_sample_vol, NewTip=True, MixReaction=True)
         water_aspirated += diluent_vol
+        dilution_well_index += 1
         water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
 
         # Add diluted sample to PCR plate
