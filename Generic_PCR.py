@@ -1,6 +1,8 @@
 import csv
+import datetime
 import os
 import math
+import platform
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
@@ -8,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.5.0',
+    'protocolName': 'Generic PCR v0.5.1',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.8'
@@ -199,7 +201,8 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
 
             dispensing_loop(args, reagent_loop, reagent_pipette,
                             reagent_labware[reagent_source_well].bottom(tip_height),
-                            reagent_dest_labware[reagent_dest_well], pcr_reagent_vol, NewTip=True, MixReaction=True)
+                            reagent_dest_labware[reagent_dest_well], pcr_reagent_vol, NewTip=True, MixReaction=True,
+                            touch=True)
 
             reagent_aspirated += pcr_reagent_vol
             tip_height = \
@@ -232,7 +235,9 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
             reagent_pipette.dispense(pcr_reagent_vol, neg_control_labware[well])
             reagent_loop -= 1
 
-        reagent_pipette.mix(3, float(args.PCR_Volume)*0.7, neg_control_labware[well])
+        reagent_pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, location=neg_control_labware[well], rate=5.0)
+        reagent_pipette.blow_out(blowout_location=neg_control_labware[well])
+        reagent_pipette.touch_tip(radius=0.75, v_offset=-8)
         reagent_pipette.drop_tip()
 
 
@@ -241,7 +246,7 @@ def labware_cone_volume(args, labware_name):
     cone_vol = 200
     labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
 
-    if "5ml_" in labware:
+    if "e5ml_" in labware:
 
         cone_vol = 1200
 
@@ -252,7 +257,7 @@ def labware_cone_volume(args, labware_name):
     return cone_vol
 
 
-def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction):
+def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction, touch=False):
     """
     Generic function to dispense material into designated well.
     @param args:
@@ -263,21 +268,31 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
     @param volume:
     @param NewTip:
     @param MixReaction:
+    @param touch:
     @return:
     """
+    def tip_touch():
+        pipette.touch_tip(radius=0.75, v_offset=-8)
+
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
         pipette.pick_up_tip()
+
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
         pipette.dispense(volume, destination_location)
+
         loop_count -= 1
         if not MixReaction:
             pipette.blow_out()
+            if touch:
+                tip_touch()
 
     if MixReaction:
-        pipette.mix(3, float(args.PCR_Volume)*0.7)
+        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=5.0)
+        tip_touch()
+
     if NewTip:
         pipette.drop_tip()
 
@@ -369,5 +384,19 @@ if __name__ == "__main__":
     protocol_file = open('Generic_PCR.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
-    print(format_runlog(run_log))
+    run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+    i = 1
+    t = format_runlog(run_log).split("\n")
+
+    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: ddPCR.py\n\nStep\tCommand\n" \
+        .format(metadata['protocolName'], run_date)
+
+    for l in t:
+        outstring += "{}\t{}\n".format(i, l)
+        i += 1
+    if platform.system() == "Windows":
+        outfile = open("C:{0}Users{0}{1}{0}Documents{0}Simulation.txt"
+                       .format(os.sep, os.getlogin()), 'w', encoding="UTF-16")
+        outfile.write(outstring)
+        outfile.close()
     protocol_file.close()

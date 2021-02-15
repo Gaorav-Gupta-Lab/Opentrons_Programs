@@ -7,15 +7,15 @@ from contextlib import suppress
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
-# import opentrons
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.3.0',
+    'protocolName': 'ddPCR v0.4.2',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
 }
+
 
 def parse_sample_file(input_file):
     """
@@ -143,7 +143,8 @@ def plate_layout():
     return plate_layout_by_column
 
 
-def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction):
+def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
+                    touch=False):
     """
     Generic function to dispense material into designated well.
     @param args:
@@ -154,22 +155,32 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
     @param volume:
     @param NewTip:
     @param MixReaction:
+    @param touch:
     @return:
     """
+    def tip_touch():
+        pipette.touch_tip(radius=0.75, v_offset=-8)
 
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
         pipette.pick_up_tip()
+
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
         pipette.dispense(volume, destination_location)
+
         loop_count -= 1
         if not MixReaction:
             pipette.blow_out()
+            if touch:
+                tip_touch()
 
     if MixReaction:
-        pipette.mix(3, float(args.PCR_Volume)*0.7)
+        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=5.0)
+        pipette.blow_out()
+        tip_touch()
+
     if NewTip:
         pipette.drop_tip()
 
@@ -300,6 +311,7 @@ def sample_processing(args, sample_parameters):
 
 
 def run(ctx):
+    ctx.comment("Begin {}".format(metadata['protocolName']))
 
     # Turn on rail lights and pause program so user can load robot deck.
     ctx.set_rail_lights(True)
@@ -352,27 +364,34 @@ def run(ctx):
         if platform.system() == "Windows":
             run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
 
-            header = "## ddPCR Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
-                     "# Format:\tTemplate | Target | Template Dilution | Template Volume in Reaction\n\n\t"\
+            plate_layout_string = \
+                "## ddPCR Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
+                "# Format:\tTemplate | Target | Template Dilution | Template Volume in Reaction\n\n\t"\
                 .format(run_date, args.User)
 
             for i in range(12):
-                header += "{}\t".format(i+1)
+                plate_layout_string += "{}\t".format(i+1)
+
+            # I have to import this here because I have been unable to get natsort on the robot.
             import natsort
-            outstring = ""
+
             for well in natsort.natsorted(layout_data):
                 well_string = "\t".join(layout_data[well])
-                outstring += "\n{}\t{}\t".format(well, well_string)
-            outfile = open("C:{0}Users{0}{1}{0}Documents{0}PlateLayout.csv".format(os.sep, os.getlogin()), 'w')
-            outfile.write(header+outstring)
-            outfile.close()
+                plate_layout_string += "\n{}\t{}\t".format(well, well_string)
+            plate_layout_file = open("C:{0}Users{0}{1}{0}Documents{0}PlateLayout.csv".format(os.sep, os.getlogin()), 'w')
+            plate_layout_file.write(plate_layout_string)
+            plate_layout_file.close()
 
     water_aspirated = dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipette)
 
     positive_control_dict = dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
-    dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette, water_aspirated)
+
+    dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette,
+                     water_aspirated)
     dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette, max_template_vol)
     dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells)
+
+    ctx.comment("\nProgram Complete")
 
     if not ctx.is_simulating():
         os.remove(tsv_file_path)
@@ -388,7 +407,8 @@ def dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, righ
     @param right_pipette:
     @return:
     """
-    target_pipette, target_loop, target_volume = pipette_selection(left_pipette, right_pipette, float(args.TargetVolume))
+    target_pipette, target_loop, target_volume = \
+        pipette_selection(left_pipette, right_pipette, float(args.TargetVolume))
     sample_destination_labware = labware_dict[args.PCR_PlateSlot]
     positive_control_dict = defaultdict(list)
 
@@ -409,9 +429,9 @@ def dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, righ
         positive_control_dict[pos_control_well] = pos_control_info
 
         for well in target_well_list:
-
             dispensing_loop(args, target_loop, target_pipette, target_source_labware[target_source_well],
-                            sample_destination_labware[well], target_volume, NewTip=False, MixReaction=False)
+                            sample_destination_labware[well], target_volume, NewTip=False, MixReaction=False,
+                            touch=True)
 
         # Drop any tips the pipettes might have.
         if left_pipette.has_tip:
@@ -481,7 +501,6 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
     reagent_labware = labware_dict[args.ReagentSlot]
     water_res_well_dia = reagent_labware[args.WaterWell].diameter
     cone_vol = labware_cone_volume(args, reagent_labware)
-
     water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
     dilution_plate_layout = plate_layout()
     dilution_well_index = 0
@@ -490,9 +509,6 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
         sample_source_labware = labware_dict[sample_parameters[sample_key][0]]
         sample_source_well = sample_parameters[sample_key][1]
         sample_dest_wells = sample_data_dict[sample_key][3]
-
-        # Remove no template control well
-        sample_dest_wells = sample_dest_wells[:-1]
         undiluted_sample_vol = sample_data_dict[sample_key][0]
         diluent_vol = sample_data_dict[sample_key][1]
         diluted_sample_vol = sample_data_dict[sample_key][2]
@@ -610,5 +626,19 @@ if __name__ == "__main__":
     protocol_file = open('ddPCR.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
-    print(format_runlog(run_log))
+    run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+    i = 1
+    t = format_runlog(run_log).split("\n")
+
+    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: ddPCR.py\n\nStep\tCommand\n" \
+        .format(metadata['protocolName'], run_date)
+
+    for l in t:
+        outstring += "{}\t{}\n".format(i, l)
+        i += 1
+    if platform.system() == "Windows":
+        outfile = open("C:{0}Users{0}{1}{0}Documents{0}Simulation.txt"
+                       .format(os.sep, os.getlogin()), 'w', encoding="UTF-16")
+        outfile.write(outstring)
+        outfile.close()
     protocol_file.close()

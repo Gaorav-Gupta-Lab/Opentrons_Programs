@@ -1,14 +1,15 @@
 import csv
+import datetime
 import math
 import os
+import platform
 from collections import defaultdict
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
-# import opentrons
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v0.4.0',
+    'protocolName': 'Illumina Dual Indexing v0.4.1',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
     'apiLevel': '2.8'
@@ -104,7 +105,6 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
         aspirated_vol += pcr_reagent_vol
 
         tip_height = res_tip_height(float(args.PCR_MixResVolume)-aspirated_vol, pcr_reservoir_dia, cone_vol)
-
 
 
 def pipette_selection(left_pipette, right_pipette, volume):
@@ -233,6 +233,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             water_pipette.pick_up_tip()
         dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(tip_height),
                         sample_destination_labware[sample_dest_well], water_volume, NewTip=False, MixReaction=False)
+
         aspirated_water_vol += water_volume
         tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
 
@@ -257,7 +258,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
 
         # Add template to the destination well for this sample.
         dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                        sample_destination_labware[sample_dest_well], sample_volume, NewTip=True, MixReaction=False)
+                        sample_destination_labware[sample_dest_well], sample_volume, NewTip=True, MixReaction=False,
+                        touch=True)
 
         # Determine primer volumes and dispense them.
         primer_volume = (float(args.PCR_Volume)/50) * 1.25
@@ -266,28 +268,54 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
 
         # D500 primers
         dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d500]],
-                        sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False)
+                        sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False,
+                        touch=True)
         # D700 primers
         dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d700]],
-                        sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False)
+                        sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False,
+                        touch=True,)
 
     return sample_dest_dict
 
 
-def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction):
+def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
+                    touch=False):
+    """
+    Generic function to dispense material into designated well.
+    @param args:
+    @param loop_count:
+    @param pipette:
+    @param source_location:
+    @param destination_location:
+    @param volume:
+    @param NewTip:
+    @param MixReaction:
+    @param touch:
+    @return:
+    """
+    def tip_touch():
+        pipette.touch_tip(radius=0.75, v_offset=-8)
+
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
         pipette.pick_up_tip()
+
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
         pipette.dispense(volume, destination_location)
+
         loop_count -= 1
         if not MixReaction:
             pipette.blow_out()
+            if touch:
+                tip_touch()
 
     if MixReaction:
-        pipette.mix(3, float(args.PCR_Volume)*0.7)
+        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=5.0)
+        pipette.blow_out()
+        tip_touch()
+
     if NewTip:
         pipette.drop_tip()
 
@@ -295,6 +323,13 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
 
 
 def run(ctx):
+    ctx.comment("Begin {}".format(metadata['protocolName']))
+
+    # Turn on rail lights and pause program so user can load robot deck.
+    ctx.set_rail_lights(True)
+    ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
+    ctx.home()
+    ctx.set_rail_lights(False)
 
     # TSV file location on OT-2
     tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
@@ -303,12 +338,6 @@ def run(ctx):
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
     sample_parameters, args = parse_sample_file(tsv_file_path)
-
-    # Turn on rail lights and pause program so user can load robot deck.
-    ctx.set_rail_lights(True)
-    ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
-    ctx.home()
-    ctx.set_rail_lights(False)
 
     # Extract Slot information
     slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
@@ -345,10 +374,27 @@ def run(ctx):
     if not ctx.is_simulating():
         os.remove(tsv_file_path)
 
+    ctx.comment("Program End")
+
 
 if __name__ == "__main__":
     protocol_file = open('Illumina_Dual_Indexing.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
-    print(format_runlog(run_log))
+    run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+    i = 1
+    t = format_runlog(run_log).split("\n")
+
+    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: ddPCR.py\n\nStep\tCommand\n" \
+        .format(metadata['protocolName'], run_date)
+
+    for l in t:
+        outstring += "{}\t{}\n".format(i, l)
+        i += 1
+    if platform.system() == "Windows":
+        outfile = open("C:{0}Users{0}{1}{0}Documents{0}Simulation.txt"
+                       .format(os.sep, os.getlogin()), 'w', encoding="UTF-16")
+        outfile.write(outstring)
+        outfile.close()
+
     protocol_file.close()
