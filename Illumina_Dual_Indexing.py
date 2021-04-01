@@ -9,7 +9,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v0.4.1',
+    'protocolName': 'Illumina Dual Indexing v0.4.2',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
     'apiLevel': '2.8'
@@ -303,6 +303,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
 
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
+        tip_touch()
         pipette.dispense(volume, destination_location)
 
         loop_count -= 1

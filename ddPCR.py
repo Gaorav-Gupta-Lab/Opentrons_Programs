@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.4.2',
+    'protocolName': 'ddPCR v0.4.5',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
@@ -110,7 +110,7 @@ def res_tip_height(res_vol, well_dia, cone_vol):
         cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
         height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-6+cone_height
     else:
-        height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 4
+        height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 5
 
     if height <= 6:
         height = 1
@@ -168,6 +168,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
 
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
+        tip_touch()
         pipette.dispense(volume, destination_location)
 
         loop_count -= 1
@@ -198,15 +199,18 @@ def calculate_volumes(args, sample_concentration):
     """
 
     template_in_reaction = float(args.DNA_in_Reaction)
+    # Target Concentration is used to keep volumes > 1 uL
     target_concentration = template_in_reaction/2
     max_template_vol = \
-        (float(args.PCR_Volume) / int(args.PCR_MixConcentration.split("x")[0])) - float(args.TargetVolume)
+        round(float(args.PCR_Volume)-((float(args.PCR_Volume) / int(args.PCR_MixConcentration.split("x")[0])) + float(args.TargetVolume)), 2)
 
+    """
     # There is the potential to need the max template volume for the lower dilutions.  This defines those.
+    # Not needed.  Simply make extra volume based on number of replicates.
     dilution_template = [(4, 4), (2, 6), (2, 10), (1, 7), (1, 9), (1, 11)]
     if args.PCR_MixConcentration == "4x":
         dilution_template = [(7, 7), (4, 12), (3, 15), (2, 14), (2, 18), (2, 22)]
-
+    """
     min_dna_in_reaction = template_in_reaction/max_template_vol
 
     # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
@@ -219,10 +223,13 @@ def calculate_volumes(args, sample_concentration):
         dilution = (i+1)*2
         diluted_dna_conc = sample_concentration/dilution
         if target_concentration >= diluted_dna_conc >= min_dna_in_reaction:
+            """
             if i < 6:
                 dilution_data = dilution_template[i]
             else:
-                dilution_data = (1, dilution-1)
+                
+            """
+            dilution_data = (1, dilution - 1)
             diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
             reaction_water_vol = max_template_vol-diluted_sample_vol
 
@@ -273,18 +280,8 @@ def sample_processing(args, sample_parameters):
                 sample_wells.append(well)
                 used_wells.append(well)
                 dest_well_count += 1
-
-        # Add no primer control well for sample and increment well count
-        no_primer_well = plate_layout_by_column[dest_well_count]
-        used_wells.append(no_primer_well)
-        sample_wells.append(no_primer_well)
-        water_vol = float(args.TargetVolume)+(max_template_vol-diluted_sample_vol)
-        water_well_dict[no_primer_well] = water_vol
+                
         sample_data_dict[sample_key] = [sample_vol, diluent_vol, diluted_sample_vol, sample_wells]
-        water_row = no_primer_well[0]
-        water_column = int(no_primer_well[1:])-1
-        layout_data[water_row][water_column] = "{}|No Primers|{}|{}".format(sample_string, dilution, diluted_sample_vol)
-        dest_well_count += 1
 
     # Define our positive control wells for the targets.
     for target in target_well_dict:
@@ -525,10 +522,14 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
-        volume_ratio = (undiluted_sample_vol + diluent_vol) / (len(sample_dest_wells) * diluted_sample_vol)
-        if volume_ratio < 1.7:
-            undiluted_sample_vol = undiluted_sample_vol*4
-            diluent_vol = diluent_vol*4
+        volume_ratio = (diluted_sample_vol*len(sample_dest_wells)) / (undiluted_sample_vol+diluent_vol)
+        if volume_ratio >= 0.6:
+            for i in range(len(sample_dest_wells)+2):
+                undiluted_sample_vol = undiluted_sample_vol*(i+1)
+                diluent_vol = diluent_vol*(i+1)
+                volume_ratio = (diluted_sample_vol * len(sample_dest_wells)) / (undiluted_sample_vol + diluent_vol)
+                if volume_ratio < 0.6:
+                    break
 
         # Reset the pipettes for the new volumes
         diluent_pipette, diluent_loop, diluent_vol = pipette_selection(left_pipette, right_pipette, diluent_vol)

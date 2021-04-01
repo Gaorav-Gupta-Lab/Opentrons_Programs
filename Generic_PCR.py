@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.5.1',
+    'protocolName': 'Generic PCR v0.5.2',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.8'
@@ -281,6 +281,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
 
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
+        tip_touch()
         pipette.dispense(volume, destination_location)
 
         loop_count -= 1
