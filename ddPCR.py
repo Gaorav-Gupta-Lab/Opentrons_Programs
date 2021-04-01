@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.4.5',
+    'protocolName': 'ddPCR v0.4.6',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.8'
@@ -108,7 +108,7 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     """
     if res_vol > cone_vol:
         cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
-        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-6+cone_height
+        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-5+cone_height
     else:
         height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 5
 
@@ -383,10 +383,11 @@ def run(ctx):
 
     positive_control_dict = dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
 
-    dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette,
-                     water_aspirated)
+    water_aspirated = dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette,
+                                       right_pipette, water_aspirated)
+
     dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette, max_template_vol)
-    dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells)
+    dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells, water_aspirated)
 
     ctx.comment("\nProgram Complete")
 
@@ -555,6 +556,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
                             sample_destination_labware[well], diluted_sample_vol, NewTip=True, MixReaction=False)
         if sample_pipette.has_tip:
             sample_pipette.drop_tip()
+    return water_aspirated
 
 
 def dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette, max_template_vol):
@@ -593,7 +595,7 @@ def dispense_positive_controls(args, positive_control_dict, labware_dict, left_p
                         NewTip=True, MixReaction=False)
 
 
-def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells):
+def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells, water_aspirated):
     """
     Dispense the SuperMix into each well.
     @param args:
@@ -601,6 +603,7 @@ def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_well
     @param left_pipette:
     @param right_pipette:
     @param used_wells:
+    @param water_aspirated:
     """
 
     reagent_labware = labware_dict[args.ReagentSlot]
@@ -620,7 +623,28 @@ def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_well
                         NewTip=True, MixReaction=True)
 
         supermix_aspirated += supermix_vol
-        supermix_tip_height = res_tip_height(float(args.PCR_MixResVolume)-supermix_aspirated, supermix_well_dia, cone_vol)
+        supermix_tip_height = res_tip_height(float(args.PCR_MixResVolume)-supermix_aspirated, supermix_well_dia,
+                                             cone_vol)
+
+    # This will fill the remaining wells with water
+    row = well[0]
+    column = well.split(row)[1]
+    wells_remaining = 12-column
+    if wells_remaining > 0:
+        reagent_labware = labware_dict[args.ReagentSlot]
+        water_res_well_dia = reagent_labware[args.WaterWell].diameter
+        cone_vol = labware_cone_volume(args, reagent_labware)
+        fill_pipette, fill_loop, fill_vol = pipette_selection(left_pipette, right_pipette, 25)
+        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+        for i in range(wells_remaining):
+            blank_well = "{}{}".format(row, i+1)
+            dispensing_loop(args, fill_loop, fill_pipette,
+                            reagent_labware[args.WaterWell].bottom(water_tip_height),
+                            sample_destination_labware[blank_well], fill_vol,
+                            NewTip=False, MixReaction=False)
+            water_aspirated = water_aspirated+fill_vol
+            water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+        fill_pipette.drop_tip()
 
 
 if __name__ == "__main__":
