@@ -10,10 +10,10 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.4.6',
+    'protocolName': 'ddPCR v0.4.7',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
-    'apiLevel': '2.8'
+    'apiLevel': '2.9'
 }
 
 
@@ -165,6 +165,9 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         if pipette.has_tip:
             pipette.drop_tip()
         pipette.pick_up_tip()
+    else:
+        if not pipette.has_tip:
+            pipette.pick_up_tip()
 
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
@@ -628,7 +631,7 @@ def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_well
 
     # This will fill the remaining wells with water
     row = well[0]
-    column = well.split(row)[1]
+    column = int(well.split(row)[1])
     wells_remaining = 12-column
     if wells_remaining > 0:
         reagent_labware = labware_dict[args.ReagentSlot]
@@ -636,8 +639,9 @@ def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_well
         cone_vol = labware_cone_volume(args, reagent_labware)
         fill_pipette, fill_loop, fill_vol = pipette_selection(left_pipette, right_pipette, 25)
         water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+
         for i in range(wells_remaining):
-            blank_well = "{}{}".format(row, i+1)
+            blank_well = "{}{}".format(row, i+1+column)
             dispensing_loop(args, fill_loop, fill_pipette,
                             reagent_labware[args.WaterWell].bottom(water_tip_height),
                             sample_destination_labware[blank_well], fill_vol,
