@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.4.7',
+    'protocolName': 'ddPCR v0.5.2',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.9'
@@ -82,21 +82,6 @@ def pipette_selection(left_pipette, right_pipette, volume):
     return pipette, loop, volume
 
 
-def load_tipracks(protocol, tiprack_list, labware_dict):
-    """
-    Creates a list of the pipette tip labware.
-    @param protocol:
-    @param tiprack_list:
-    @param labware_dict:
-    @return:
-    """
-    tiprack_labware = []
-    for slot in tiprack_list:
-        if slot not in protocol.loaded_labwares:
-            tiprack_labware.append(labware_dict[str(slot)])
-    return tiprack_labware
-
-
 def res_tip_height(res_vol, well_dia, cone_vol):
     """
     Calculate the the height of the liquid in a reservoir and return the value to set the pipette tip height.
@@ -107,13 +92,13 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     @return:
     """
     if res_vol > cone_vol:
-        cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
+        cone_height = (3*cone_vol/(math.pi*((well_dia/2)**2)))
         height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-5+cone_height
     else:
-        height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 5
+        height = (3*res_vol/(math.pi*((well_dia/2)**2)))-3
 
-    if height <= 6:
-        height = 1
+    if height < 1:
+        height = 0
 
     return int(height)
 
@@ -129,7 +114,7 @@ def labware_cone_volume(args, labware_name):
 
     elif"1.5ml" in labware:
 
-        cone_vol = 500
+        cone_vol = 450
 
     return cone_vol
 
@@ -225,13 +210,8 @@ def calculate_volumes(args, sample_concentration):
     for i in range(50):
         dilution = (i+1)*2
         diluted_dna_conc = sample_concentration/dilution
+
         if target_concentration >= diluted_dna_conc >= min_dna_in_reaction:
-            """
-            if i < 6:
-                dilution_data = dilution_template[i]
-            else:
-                
-            """
             dilution_data = (1, dilution - 1)
             diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
             reaction_water_vol = max_template_vol-diluted_sample_vol
@@ -310,7 +290,33 @@ def sample_processing(args, sample_parameters):
     return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
 
 
+def labware_parsing(args, ctx):
+
+    # Extract Slot information
+    slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
+    labware_dict = {}
+    tipbox_dict = \
+        {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
+         "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
+         "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]}
+    # Pipette Tip Boxes
+    left_tiprack_list = []
+    right_tiprack_list = []
+    for i in range(len(slot_list)):
+        labware = getattr(args, "{}".format(slot_list[i]))
+        if labware:
+            labware_dict[str(i+1)] = ctx.load_labware(labware, str(i + 1))
+            if labware in tipbox_dict[args.LeftPipette]:
+                left_tiprack_list.append(labware_dict[str(i+1)])
+            elif labware in tipbox_dict[args.RightPipette]:
+                right_tiprack_list.append(labware_dict[str(i+1)])
+
+    return labware_dict, left_tiprack_list, right_tiprack_list
+
+
 def run(ctx):
+    start_time = datetime.datetime.today()
+
     ctx.comment("Begin {}".format(metadata['protocolName']))
 
     # Turn on rail lights and pause program so user can load robot deck.
@@ -321,67 +327,50 @@ def run(ctx):
 
     # TSV file location on OT-2
     tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
+
+    # If not on the OT-2, get temp TSV file location on Win10 Computers for simulation
     if not os.path.isfile(tsv_file_path):
-        # Temp TSV file location on Win10 Computers for simulation
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
     sample_parameters, args = parse_sample_file(tsv_file_path)
-
-    # Extract Slot information
-    slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
-    labware_dict = {}
-
-    for i in range(len(slot_list)):
-        labware = getattr(args, "{}".format(slot_list[i]))
-        if labware:
-            labware_dict[str(i+1)] = ctx.load_labware(labware, str(i+1))
-
-    # Pipette Tip Boxes
-    left_tipracks = ""
-    right_tipracks = ""
-    if args.LeftPipetteTipRackSlot:
-        left_tipracks = load_tipracks(ctx, args.LeftPipetteTipRackSlot.split(","), labware_dict)
-    if args.RightPipetteTipRackSlot:
-        right_tipracks = load_tipracks(ctx, args.RightPipetteTipRackSlot.split(","), labware_dict)
+    labware_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
 
     # Pipettes
-    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tipracks)
-    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tipracks)
+    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)
+    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tiprack_list)
 
     # Set the location of the first tip in box.
     with suppress(IndexError):
-        left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip]
-
+        left_pipette.starting_tip = left_tiprack_list[0].wells_by_name()[args.LeftPipetteFirstTip]
     with suppress(IndexError):
-        right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip]
+        right_pipette.starting_tip = right_tiprack_list[0].wells_by_name()[args.RightPipetteFirstTip]
 
     sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol = \
         sample_processing(args, sample_parameters)
 
     # This will output a plate layout file.  Only does it during the simulation from our GUI
-    if ctx.is_simulating():
+    if ctx.is_simulating() and platform.system() == "Windows":
         # if not os.path.isdir("C:{0}Users{0}{1}{0}Documents".format(os.sep, os.getlogin())):
-        if platform.system() == "Windows":
-            run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+        run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+        plate_layout_string = \
+            "## ddPCR Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
+            "# Format:\tTemplate | Target | Template Dilution | Template Volume in Reaction\n\n\t"\
+            .format(run_date, args.User)
 
-            plate_layout_string = \
-                "## ddPCR Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
-                "# Format:\tTemplate | Target | Template Dilution | Template Volume in Reaction\n\n\t"\
-                .format(run_date, args.User)
+        for i in range(12):
+            plate_layout_string += "{}\t".format(i+1)
 
-            for i in range(12):
-                plate_layout_string += "{}\t".format(i+1)
+        # I have to import this here because I have been unable to get natsort on the robot.
+        import natsort
 
-            # I have to import this here because I have been unable to get natsort on the robot.
-            import natsort
+        for well in natsort.natsorted(layout_data):
+            well_string = "\t".join(layout_data[well])
+            plate_layout_string += "\n{}\t{}\t".format(well, well_string)
+        plate_layout_file = open("C:{0}Users{0}{1}{0}Documents{0}PlateLayout.tsv".format(os.sep, os.getlogin()), 'w')
+        plate_layout_file.write(plate_layout_string)
+        plate_layout_file.close()
 
-            for well in natsort.natsorted(layout_data):
-                well_string = "\t".join(layout_data[well])
-                plate_layout_string += "\n{}\t{}\t".format(well, well_string)
-            plate_layout_file = open("C:{0}Users{0}{1}{0}Documents{0}PlateLayout.csv".format(os.sep, os.getlogin()), 'w')
-            plate_layout_file.write(plate_layout_string)
-            plate_layout_file.close()
-
+    # Now do the actual dispensing.
     water_aspirated = dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipette)
 
     positive_control_dict = dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
@@ -390,12 +379,45 @@ def run(ctx):
                                        right_pipette, water_aspirated)
 
     dispense_positive_controls(args, positive_control_dict, labware_dict, left_pipette, right_pipette, max_template_vol)
-    dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells, water_aspirated)
+
+    dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells)
+
+    fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
 
     ctx.comment("\nProgram Complete")
 
     if not ctx.is_simulating():
         os.remove(tsv_file_path)
+
+
+def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette):
+    """
+    This will fill the remaining wells in a column with water.  Needed to for the droplet generator.
+    @rtype: object
+    """
+
+    last_used_well = used_wells[-1]
+    row = last_used_well[0]
+    column = int(last_used_well.split(row)[1])
+    wells_remaining = 12-column
+
+    if wells_remaining > 0:
+        sample_destination_labware = labware_dict[args.PCR_PlateSlot]
+        reagent_labware = labware_dict[args.ReagentSlot]
+        water_res_well_dia = reagent_labware[args.WaterWell].diameter
+        cone_vol = labware_cone_volume(args, reagent_labware)
+        fill_pipette, fill_loop, fill_vol = pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume))
+        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+
+        for i in range(wells_remaining):
+            blank_well = "{}{}".format(row, i+1+column)
+            dispensing_loop(args, fill_loop, fill_pipette,
+                            reagent_labware[args.WaterWell].bottom(water_tip_height),
+                            sample_destination_labware[blank_well], fill_vol,
+                            NewTip=False, MixReaction=False)
+            water_aspirated = water_aspirated+fill_vol
+            water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+        fill_pipette.drop_tip()
 
 
 def dispense_primer_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette):
@@ -464,7 +486,7 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
         water_volume = water_well_dict[well]
 
         # There is a bug in the Opentrons software that results in a 0 uL aspiration defaulting to pipette max.
-        if water_volume < 0.4:
+        if water_volume < 0.2:
             continue
 
         # Define the pipette for dispensing the water.
@@ -527,12 +549,12 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
 
         # Adjust volume of diluted sample to make sure there is enough
         volume_ratio = (diluted_sample_vol*len(sample_dest_wells)) / (undiluted_sample_vol+diluent_vol)
-        if volume_ratio >= 0.6:
+        if volume_ratio >= 0.66:
             for i in range(len(sample_dest_wells)+2):
                 undiluted_sample_vol = undiluted_sample_vol*(i+1)
                 diluent_vol = diluent_vol*(i+1)
                 volume_ratio = (diluted_sample_vol * len(sample_dest_wells)) / (undiluted_sample_vol + diluent_vol)
-                if volume_ratio < 0.6:
+                if volume_ratio < 0.66:
                     break
 
         # Reset the pipettes for the new volumes
@@ -598,7 +620,7 @@ def dispense_positive_controls(args, positive_control_dict, labware_dict, left_p
                         NewTip=True, MixReaction=False)
 
 
-def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells, water_aspirated):
+def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_wells):
     """
     Dispense the SuperMix into each well.
     @param args:
@@ -628,27 +650,6 @@ def dispense_supermix(args, labware_dict, left_pipette, right_pipette, used_well
         supermix_aspirated += supermix_vol
         supermix_tip_height = res_tip_height(float(args.PCR_MixResVolume)-supermix_aspirated, supermix_well_dia,
                                              cone_vol)
-
-    # This will fill the remaining wells with water
-    row = well[0]
-    column = int(well.split(row)[1])
-    wells_remaining = 12-column
-    if wells_remaining > 0:
-        reagent_labware = labware_dict[args.ReagentSlot]
-        water_res_well_dia = reagent_labware[args.WaterWell].diameter
-        cone_vol = labware_cone_volume(args, reagent_labware)
-        fill_pipette, fill_loop, fill_vol = pipette_selection(left_pipette, right_pipette, 25)
-        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
-
-        for i in range(wells_remaining):
-            blank_well = "{}{}".format(row, i+1+column)
-            dispensing_loop(args, fill_loop, fill_pipette,
-                            reagent_labware[args.WaterWell].bottom(water_tip_height),
-                            sample_destination_labware[blank_well], fill_vol,
-                            NewTip=False, MixReaction=False)
-            water_aspirated = water_aspirated+fill_vol
-            water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
-        fill_pipette.drop_tip()
 
 
 if __name__ == "__main__":

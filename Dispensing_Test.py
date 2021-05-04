@@ -1,19 +1,15 @@
-import csv
 import datetime
 import math
 import os
 import platform
-from contextlib import suppress
-from collections import defaultdict
-from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.4.6',
+    'protocolName': 'Tip Height and Dispensing Test Module v0.1.0',
     'author': 'Dennis Simpson',
-    'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
-    'apiLevel': '2.8'
+    'description': 'Testing the tip height of both pipettes simultaneously',
+    'apiLevel': '2.9'
 }
 
 
@@ -42,27 +38,26 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     @return:
     """
     if res_vol > cone_vol:
-        cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
+        cone_height = (3*cone_vol/(math.pi*((well_dia/2)**2)))
         height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-5+cone_height
     else:
-        height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 5
+        height = (3*res_vol/(math.pi*((well_dia/2)**2)))-5
 
-    if height <= 6:
+    if height <= 4:
         height = 1
 
     return int(height)
 
 
-def dispensing_loop(loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
+def dispensing_loop(loop_count, pipette, source_location, destination_location, vol, NewTip, MixReaction,
                     touch=False):
     """
     Generic function to dispense material into designated well.
-    @param args:
     @param loop_count:
     @param pipette:
     @param source_location:
     @param destination_location:
-    @param volume:
+    @param vol:
     @param NewTip:
     @param MixReaction:
     @param touch:
@@ -71,15 +66,16 @@ def dispensing_loop(loop_count, pipette, source_location, destination_location, 
     def tip_touch():
         pipette.touch_tip(radius=0.75, v_offset=-8)
 
-    if NewTip:
-        if pipette.has_tip:
-            pipette.drop_tip()
+    if NewTip and pipette.has_tip:
+        pipette.drop_tip()
+
+    if not pipette.has_tip:
         pipette.pick_up_tip()
 
     while loop_count > 0:
-        pipette.aspirate(volume, source_location)
+        pipette.aspirate(vol, source_location)
         tip_touch()
-        pipette.dispense(volume, destination_location)
+        pipette.dispense(vol, destination_location)
 
         loop_count -= 1
         if not MixReaction:
@@ -88,12 +84,9 @@ def dispensing_loop(loop_count, pipette, source_location, destination_location, 
                 tip_touch()
 
     if MixReaction:
-        pipette.mix(repetitions=4, volume=25*0.7, rate=5.0)
+        pipette.mix(repetitions=4, volume=vol*0.7, rate=5.0)
         pipette.blow_out()
         tip_touch()
-
-    if NewTip:
-        pipette.drop_tip()
 
     return pipette
 
@@ -104,34 +97,43 @@ def run(ctx):
     # Turn on rail lights and pause program so user can load robot deck.
     ctx.set_rail_lights(True)
     right_tipracks = [ctx.load_labware('opentrons_96_tiprack_300ul', '3')]
-    water_pipette = ctx.load_instrument('p300_single_gen2', 'right', tip_racks=right_tipracks)
-    print(water_pipette)
+    left_tipracks = [ctx.load_labware('opentrons_96_filtertiprack_20ul', '1')]
+    right_pipette = ctx.load_instrument('p300_single_gen2', 'right', tip_racks=right_tipracks)
+    left_pipette = ctx.load_instrument('p20_single_gen2', 'left', tip_racks=left_tipracks)
     reagent_labware = ctx.load_labware('vwrmicrocentrifugetube1.5ml_24_tuberack_1500ul', '2')
     cone_vol = 500
-    initial_water_volume = 1500
-    dispensed_vol = 25
+    initial_water_volume = 600
+    right_dispensed_vol = 25
+    left_dispensed_vol = 14
     source_well = "D1"
     destination_well = "D3"
     water_res_well_dia = reagent_labware["A1"].diameter
     water_tip_height = res_tip_height(initial_water_volume, water_res_well_dia, cone_vol)
     water_aspirated = 0
     count = 0
+    ctx.comment("{}; {}".format(left_pipette, right_pipette))
 
     while count < 11:
-        ctx.comment(str(water_tip_height))
-        if not water_pipette.has_tip:
-            water_pipette.pick_up_tip()
+        ctx.comment("Tip Height:  {}mm".format(water_tip_height))
 
-        dispensing_loop(1, water_pipette, reagent_labware[source_well].bottom(water_tip_height),
-                        reagent_labware[destination_well], dispensed_vol, NewTip=False, MixReaction=False)
+        # Test Left Pipette
+        dispensing_loop(1, left_pipette, reagent_labware[source_well].bottom(water_tip_height),
+                        reagent_labware[destination_well], left_dispensed_vol, NewTip=False, MixReaction=False)
 
-        water_aspirated += dispensed_vol
+        water_aspirated += left_dispensed_vol
+        water_tip_height = res_tip_height(initial_water_volume-water_aspirated, water_res_well_dia, cone_vol)
+
+        # Test Right Pipette
+        dispensing_loop(1, right_pipette, reagent_labware[source_well].bottom(water_tip_height),
+                        reagent_labware[destination_well], right_dispensed_vol, NewTip=False, MixReaction=False)
+
+        water_aspirated += right_dispensed_vol
         water_tip_height = res_tip_height(initial_water_volume-water_aspirated, water_res_well_dia, cone_vol)
 
         count += 1
 
-    if water_pipette.has_tip:
-        water_pipette.drop_tip()
+    left_pipette.drop_tip()
+    right_pipette.drop_tip()
 
 
 if __name__ == "__main__":
@@ -142,14 +144,14 @@ if __name__ == "__main__":
     i = 1
     t = format_runlog(run_log).split("\n")
 
-    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: ddPCR.py\n\nStep\tCommand\n" \
+    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: Dispensing_Test.py\n\nStep\tCommand\n" \
         .format(metadata['protocolName'], run_date)
 
     for l in t:
         outstring += "{}\t{}\n".format(i, l)
         i += 1
     if platform.system() == "Windows":
-        outfile = open("C:{0}Users{0}{1}{0}Documents{0}Simulation.txt"
+        outfile = open("C:{0}Users{0}{1}{0}Documents{0}Dispensing_Simulation.txt"
                        .format(os.sep, os.getlogin()), 'w', encoding="UTF-16")
         outfile.write(outstring)
         outfile.close()

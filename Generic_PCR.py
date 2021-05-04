@@ -4,16 +4,16 @@ import os
 import math
 import platform
 from collections import defaultdict
+from contextlib import suppress
 from types import SimpleNamespace
 from opentrons.simulate import simulate, format_runlog
-# import opentrons
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.5.2',
+    'protocolName': 'Generic PCR v0.5.4',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
-    'apiLevel': '2.8'
+    'apiLevel': '2.9'
 }
 
 
@@ -107,15 +107,38 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     @return:
     """
     if res_vol > cone_vol:
-        cone_height = (3*cone_vol / (math.pi * ((well_dia / 2) ** 2)))
-        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-9+cone_height
+        cone_height = (3*cone_vol/(math.pi*((well_dia/2)**2)))
+        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-5+cone_height
     else:
-        height = (3*res_vol / (math.pi * ((well_dia / 2) ** 2))) - 4
+        height = (3*res_vol/(math.pi*((well_dia/2)**2)))-3
 
-    if height <= 8:
-        height = 1
+    if height < 1:
+        height = 0
 
     return int(height)
+
+
+def labware_parsing(args, ctx):
+    # Extract Slot information
+    slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
+    labware_dict = {}
+    tipbox_dict = \
+        {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
+         "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
+         "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]}
+    # Pipette Tip Boxes
+    left_tiprack_list = []
+    right_tiprack_list = []
+    for i in range(len(slot_list)):
+        labware = getattr(args, "{}".format(slot_list[i]))
+        if labware:
+            labware_dict[str(i + 1)] = ctx.load_labware(labware, str(i + 1))
+            if labware in tipbox_dict[args.LeftPipette]:
+                left_tiprack_list.append(labware_dict[str(i + 1)])
+            elif labware in tipbox_dict[args.RightPipette]:
+                right_tiprack_list.append(labware_dict[str(i + 1)])
+
+    return labware_dict, left_tiprack_list, right_tiprack_list
 
 
 def run(ctx):
@@ -133,31 +156,17 @@ def run(ctx):
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
     sample_parameters, args = parse_sample_file(tsv_file_path)
-
-    # Extract Slot information
-    slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
-    labware_dict = {}
-    for i in range(len(slot_list)):
-        labware = getattr(args, "{}".format(slot_list[i]))
-
-        if labware:
-            labware_dict[str(i+1)] = ctx.load_labware(labware, str(i+1))
-
-    # Pipette Tip Boxes
-    left_tipracks = ""
-    right_tipracks = ""
-    if args.LeftPipetteTipRackSlot:
-        left_tipracks = load_tipracks(ctx, args.LeftPipetteTipRackSlot.split(","), labware_dict)
-    if args.RightPipetteTipRackSlot:
-        right_tipracks = load_tipracks(ctx, args.RightPipetteTipRackSlot.split(","), labware_dict)
+    labware_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
 
     # Pipettes
-    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tipracks)
-    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tipracks)
+    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)
+    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tiprack_list)
 
     # Set the location of the first tip in box.
-    left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip]
-    right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip]
+    with suppress(IndexError):
+        left_pipette.starting_tip = left_tiprack_list[0].wells_by_name()[args.LeftPipetteFirstTip]
+    with suppress(IndexError):
+        right_pipette.starting_tip = right_tiprack_list[0].wells_by_name()[args.RightPipetteFirstTip]
 
     # Dispense Samples
     sample_data_dict, aspirated_water_vol = \
@@ -252,7 +261,7 @@ def labware_cone_volume(args, labware_name):
 
     elif"1.5ml" in labware:
 
-        cone_vol = 500
+        cone_vol = 450
 
     return cone_vol
 
@@ -344,7 +353,6 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
 
         # Add water to all the destination wells for this sample.
         for sample_dest_well in sample_dest_wells:
-
             if not water_pipette.has_tip:
                 water_pipette.pick_up_tip()
 
