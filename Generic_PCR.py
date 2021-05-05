@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.5.4',
+    'protocolName': 'Generic PCR v0.6.0',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.9'
@@ -202,8 +202,9 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
     reagent_aspirated = 0
 
     for sample_key in sample_data_dict:
-        reagent_dest_labware = sample_data_dict[sample_key][0]
-        reagent_dest_wells = sample_data_dict[sample_key][1]
+        sample_data = sample_data_dict[sample_key][0]
+        reagent_dest_labware = labware_dict[sample_data[0]]
+        reagent_dest_wells = sample_data[1]
         for reagent_dest_well in reagent_dest_wells:
             if not reagent_pipette.has_tip:
                 reagent_pipette.pick_up_tip()
@@ -221,7 +222,7 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
     if args.WaterControl:
         water_reservoir_dia = reagent_labware[args.WaterWell].diameter
         water_tip_height = \
-            res_tip_height(float(args.WaterWell) - aspirated_water_vol, water_reservoir_dia, cone_vol)
+            res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
 
         slot = args.WaterControl.split(',')[0]
         well = args.WaterControl.split(',')[1]
@@ -244,8 +245,8 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
             reagent_pipette.dispense(pcr_reagent_vol, neg_control_labware[well])
             reagent_loop -= 1
 
-        reagent_pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, location=neg_control_labware[well], rate=5.0)
-        reagent_pipette.blow_out(blowout_location=neg_control_labware[well])
+        reagent_pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=5.0)
+        reagent_pipette.blow_out()
         reagent_pipette.touch_tip(radius=0.75, v_offset=-8)
         reagent_pipette.drop_tip()
 
@@ -369,10 +370,11 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     # Now dispense samples into PCR wells.
     for sample_key in sample_data_dict:
         sample_source_well = sample_parameters[sample_key][1]
-        sample_source_labware = sample_parameters[sample_key][0]
-        sample_volume = sample_data_dict[sample_key][2]
-        sample_dest_wells = sample_data_dict[sample_key][1]
-        sample_dest_labware = sample_data_dict[sample_key][0]
+        sample_source_labware = labware_dict[sample_parameters[sample_key][0]]
+        sample_data = sample_data_dict[sample_key][0]
+        sample_volume = sample_data[2]
+        sample_dest_wells = sample_data[1]
+        sample_dest_labware = labware_dict[sample_data[0]]
 
         # Define the pipettes for dispensing the samples.
         sample_pipette, sample_loop, sample_volume = pipette_selection(left_pipette, right_pipette, sample_volume)
