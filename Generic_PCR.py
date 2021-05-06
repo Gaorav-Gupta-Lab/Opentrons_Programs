@@ -370,9 +370,9 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
                             sample_destination_labware[sample_dest_well], sample_volume, NewTip=False, MixReaction=False)
 
         # Drop any tips the pipettes might have.
-        if left_pipette.has_tip():
+        if left_pipette.has_tip:
             left_pipette.drop_tip()
-        if right_pipette.has_tip():
+        if right_pipette.has_tip:
             right_pipette.drop_tip()
     '''
     # Now dispense samples into PCR wells.
