@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.6.1',
+    'protocolName': 'Generic PCR v0.6.2',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.9'
@@ -369,9 +369,9 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
                             sample_destination_labware[sample_dest_well], sample_volume, NewTip=False, MixReaction=False)
 
-    # Drop any tips the pipettes might have.
-    left_pipette.drop_tip()
-    right_pipette.drop_tip()
+        # Drop any tips the pipettes might have.
+        left_pipette.drop_tip()
+        right_pipette.drop_tip()
     '''
     # Now dispense samples into PCR wells.
     for sample_key in sample_data_dict:
