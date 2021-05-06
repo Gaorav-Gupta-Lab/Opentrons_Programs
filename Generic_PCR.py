@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.6.0',
+    'protocolName': 'Generic PCR v0.6.1',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.9'
@@ -333,24 +333,21 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     sample_data_dict = defaultdict(list)
     for sample_key in sample_parameters:
         concentration = float(sample_parameters[sample_key][3])
-        sample_volume_needed = sample_mass/concentration
+        sample_volume = round(sample_mass/concentration, 2)
         sample_dest_slot = sample_parameters[sample_key][4]
         sample_destination_labware = labware_dict[sample_dest_slot]
+        sample_source_labware = labware_dict[sample_parameters[sample_key][0]]
+        sample_source_well = sample_parameters[sample_key][1]
 
         # If user has replicates there can be more than one sample destination well.
         sample_dest_wells = sample_parameters[sample_key][5].split(",")
-
-        # Apply some sanity to the sample volumes
-        if sample_volume_needed > 20:
-            sample_volume = round(sample_volume_needed, 1)
-        else:
-            sample_volume = round(sample_volume_needed, 2)
 
         water_volume = round((0.5*reaction_vol)-sample_volume, 2)
         sample_data_dict[sample_key].append((sample_dest_slot, sample_dest_wells, sample_volume))
 
         # Define the pipettes for dispensing the water.
         water_pipette, water_loop, water_volume = pipette_selection(left_pipette, right_pipette, water_volume)
+        sample_pipette, sample_loop, sample_volume = pipette_selection(left_pipette, right_pipette, sample_volume)
 
         # Add water to all the destination wells for this sample.
         for sample_dest_well in sample_dest_wells:
@@ -363,10 +360,19 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             aspirated_water_vol += water_volume
             tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
 
+        # Add template to all the destination wells for this sample.
+        for sample_dest_well in sample_dest_wells:
+
+            if not sample_pipette.has_tip:
+                sample_pipette.pick_up_tip()
+
+            dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
+                            sample_destination_labware[sample_dest_well], sample_volume, NewTip=False, MixReaction=False)
+
     # Drop any tips the pipettes might have.
     left_pipette.drop_tip()
     right_pipette.drop_tip()
-
+    '''
     # Now dispense samples into PCR wells.
     for sample_key in sample_data_dict:
         sample_source_well = sample_parameters[sample_key][1]
@@ -387,7 +393,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
 
             dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
                             sample_dest_labware[sample_dest_well], sample_volume, NewTip=True, MixReaction=False)
-
+    '''
     return sample_data_dict, aspirated_water_vol
 
 
