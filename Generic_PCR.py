@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.6.3',
+    'protocolName': 'Generic PCR v0.6.4',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.9'
@@ -206,9 +206,6 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
         reagent_dest_labware = labware_dict[sample_data[0]]
         reagent_dest_wells = sample_data[1]
         for reagent_dest_well in reagent_dest_wells:
-            if not reagent_pipette.has_tip:
-                reagent_pipette.pick_up_tip()
-
             dispensing_loop(args, reagent_loop, reagent_pipette,
                             reagent_labware[reagent_source_well].bottom(tip_height),
                             reagent_dest_labware[reagent_dest_well], pcr_reagent_vol, NewTip=True, MixReaction=True,
@@ -374,28 +371,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             left_pipette.drop_tip()
         if right_pipette.has_tip:
             right_pipette.drop_tip()
-    '''
-    # Now dispense samples into PCR wells.
-    for sample_key in sample_data_dict:
-        sample_source_well = sample_parameters[sample_key][1]
-        sample_source_labware = labware_dict[sample_parameters[sample_key][0]]
-        sample_data = sample_data_dict[sample_key][0]
-        sample_volume = sample_data[2]
-        sample_dest_wells = sample_data[1]
-        sample_dest_labware = labware_dict[sample_data[0]]
 
-        # Define the pipettes for dispensing the samples.
-        sample_pipette, sample_loop, sample_volume = pipette_selection(left_pipette, right_pipette, sample_volume)
-
-        # Add template to all the destination wells for this sample.
-        for sample_dest_well in sample_dest_wells:
-
-            if not sample_pipette.has_tip:
-                sample_pipette.pick_up_tip()
-
-            dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                            sample_dest_labware[sample_dest_well], sample_volume, NewTip=True, MixReaction=False)
-    '''
     return sample_data_dict, aspirated_water_vol
 
 
