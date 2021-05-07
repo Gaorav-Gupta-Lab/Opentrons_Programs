@@ -10,7 +10,7 @@ from opentrons.simulate import simulate, format_runlog
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v0.4.4',
+    'protocolName': 'Illumina Dual Indexing v0.4.5',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
     'apiLevel': '2.9'
@@ -156,7 +156,7 @@ def res_tip_height(res_vol, well_dia, cone_vol):
     if height < 1:
         height = 0
 
-    return int(height)
+    return round(height, 1)
 
 
 def labware_cone_volume(args, labware_name):
@@ -217,11 +217,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         sample_destination_labware = labware_dict[sample_dest_slot]
 
         # Apply some sanity to the sample volumes
-        if sample_volume_needed > 20:
-            sample_volume = round(sample_volume_needed, 1)
-        else:
-            sample_volume = round(sample_volume_needed, 2)
-
+        sample_volume = round(sample_volume_needed, 1)
         water_volume = (0.5*reaction_vol)-sample_volume
 
         # Define the pipette for dispensing the water.
@@ -230,8 +226,6 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         sample_dest_dict[sample_key].append((sample_dest_slot, sample_dest_well, sample_volume))
 
         # Add water to all the destination wells for this sample.
-        if not water_pipette.has_tip:
-            water_pipette.pick_up_tip()
         dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(tip_height),
                         sample_destination_labware[sample_dest_well], water_volume, NewTip=False, MixReaction=False)
 
@@ -239,8 +233,10 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
 
     # Drop any tips the pipettes might have.
-    left_pipette.drop_tip()
-    right_pipette.drop_tip()
+    if left_pipette.has_tip:
+        left_pipette.drop_tip()
+    if right_pipette.has_tip:
+        right_pipette.drop_tip()
 
     # Change pipettes.
     primer_labware = labware_dict[args.IndexPrimersSlot]
@@ -300,6 +296,8 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
+
+    if not pipette.has_tip:
         pipette.pick_up_tip()
 
     while loop_count > 0:
