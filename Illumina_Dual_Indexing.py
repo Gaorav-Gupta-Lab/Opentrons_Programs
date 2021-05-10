@@ -154,7 +154,7 @@ def res_tip_height(res_vol, well_dia, cone_vol):
         height = (3*res_vol/(math.pi*((well_dia/2)**2)))-3
 
     if height < 1:
-        height = 0
+        height = 1
 
     return round(height, 1)
 
@@ -206,6 +206,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     cone_vol = labware_cone_volume(args, reagent_labware)
     tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol)
     aspirated_water_vol = 0
+    bottom_offset = float(args.BottomOffset)
 
     # First pipette water into each well.
     sample_dest_dict = defaultdict(list)
@@ -254,7 +255,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             pipette_selection(left_pipette, right_pipette, sample_volume)
 
         # Add template to the destination well for this sample.
-        dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
+        dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well].bottom(bottom_offset),
                         sample_destination_labware[sample_dest_well], sample_volume, NewTip=True, MixReaction=False,
                         touch=True)
 
@@ -264,11 +265,11 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
             pipette_selection(left_pipette, right_pipette, primer_volume)
 
         # D500 primers
-        dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d500]],
+        dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d500]].bottom(bottom_offset),
                         sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False,
                         touch=True)
         # D700 primers
-        dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d700]],
+        dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d700]].bottom(bottom_offset),
                         sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False,
                         touch=True,)
 
