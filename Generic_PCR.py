@@ -1,147 +1,33 @@
-import csv
 import datetime
 import os
-import math
+import sys
 import platform
 from collections import defaultdict
 from contextlib import suppress
-from types import SimpleNamespace
+from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
+
+# Check if we are on the OT-2, Robotron, or some other computer.
+if not os.path.exists("C:{0}Opentrons_Programs".format(os.sep)):
+    template_parser_path = "{0}var{0}lib{0}jupyter{0}notebooks".format(os.sep)
+    if not os.path.exists(template_parser_path):
+        template_parser_path = \
+            "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
+    sys.path.insert(1, template_parser_path)
+
+from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop
+
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.6.4',
+    'protocolName': 'Generic PCR v0.7.0',
     'author': 'Dennis Simpson',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.9'
 }
 
 
-def parse_sample_file(input_file):
-    """
-    Parse the TSV file and return data objects to run def.
-    @param input_file:
-    @return:
-    """
-    line_num = 0
-    options_dictionary = defaultdict(str)
-    sample_dictionary = defaultdict(list)
-    index_file = list(csv.reader(open(input_file), delimiter='\t'))
-    for line in index_file:
-        line_num += 1
-        col_count = len(line)
-        tmp_line = []
-        sample_key = ""
-        if col_count > 0 and "#" not in line[0] and len(line[0].split("#")[0]) > 0:
-            # Skip any lines that are blank or comments.
-            for i in range(6):
-                try:
-                    line[i] = line[i].split("#")[0]  # Strip out end of line comments and white space.
-                except IndexError:
-                    continue
-
-                if i == 0 and "--" in line[0]:
-                    key = line[0].strip('--')
-                    options_dictionary[key] = line[1]
-                elif "--" not in line[0] and int(line[0]) < 12:
-                    sample_key = line[0], line[1]
-                    tmp_line.append(line[i])
-            if sample_key:
-                sample_dictionary[sample_key] = tmp_line
-
-    return sample_dictionary, SimpleNamespace(**options_dictionary)
-
-
-def pipette_selection(left_pipette, right_pipette, volume):
-    """
-    Function to select pipette based on expected volumes.  Will also adjust volume is pipette needs to pick up >1x
-    @param left_pipette:
-    @param right_pipette:
-    @param volume:
-    @return:
-    """
-    loop = 1
-    pipette = ""
-    if volume > 20 and "P300 Single-Channel GEN2" in str(right_pipette):
-        pipette = right_pipette
-    elif volume <= 20 and "P20 Single-Channel GEN2" in str(left_pipette):
-        pipette = left_pipette
-    elif volume < 10 and "P10 Single-Channel GEN1" in str(left_pipette):
-        pipette = left_pipette
-    elif volume < 10 and "P10 Single-Channel GEN1" in str(right_pipette):
-        pipette = right_pipette
-    elif 10 <= volume <= 20 and "P10 Single-Channel GEN1" in str(left_pipette):
-        pipette = left_pipette
-        volume = volume * 0.5
-        loop = 2
-    elif 10 <= volume <= 20 and "P10 Single-Channel GEN1" in str(right_pipette):
-        pipette = right_pipette
-        volume = volume * 0.5
-        loop = 2
-
-    return pipette, loop, volume
-
-
-def load_tipracks(protocol, tiprack_list, labware_dict):
-    """
-    Creates a list of the pipette tip labware.
-    @param protocol:
-    @param tiprack_list:
-    @param labware_dict:
-    @return:
-    """
-    tiprack_labware = []
-    for slot in tiprack_list:
-        if slot not in protocol.loaded_labwares:
-            tiprack_labware.append(labware_dict[str(slot)])
-    return tiprack_labware
-
-
-def res_tip_height(res_vol, well_dia, cone_vol):
-    """
-    Calculate the the height of the liquid in a reservoir and return the value to set the pipette tip height.
-    This works for both conical shapes and cylinders.
-    @param res_vol:
-    @param well_dia:
-    @param cone_vol:
-    @return:
-    """
-    if res_vol > cone_vol:
-        cone_height = (3*cone_vol/(math.pi*((well_dia/2)**2)))
-        height = ((res_vol-cone_vol)/(math.pi*((well_dia/2)**2)))-5+cone_height
-    else:
-        height = (3*res_vol/(math.pi*((well_dia/2)**2)))-3
-
-    if height < 1:
-        height = 0
-
-    return int(height)
-
-
-def labware_parsing(args, ctx):
-    # Extract Slot information
-    slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
-    labware_dict = {}
-    tipbox_dict = \
-        {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
-         "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
-         "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]}
-    # Pipette Tip Boxes
-    left_tiprack_list = []
-    right_tiprack_list = []
-    for i in range(len(slot_list)):
-        labware = getattr(args, "{}".format(slot_list[i]))
-        if labware:
-            labware_dict[str(i + 1)] = ctx.load_labware(labware, str(i + 1))
-            if labware in tipbox_dict[args.LeftPipette]:
-                left_tiprack_list.append(labware_dict[str(i + 1)])
-            elif labware in tipbox_dict[args.RightPipette]:
-                right_tiprack_list.append(labware_dict[str(i + 1)])
-
-    return labware_dict, left_tiprack_list, right_tiprack_list
-
-
-def run(ctx):
+def run(ctx: protocol_api.ProtocolContext):
 
     # Turn on rail lights and pause program so user can load robot deck.
     ctx.set_rail_lights(True)
@@ -155,7 +41,7 @@ def run(ctx):
         # Temp TSV file location on Win10 Computers for simulation
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
-    sample_parameters, args = parse_sample_file(tsv_file_path)
+    sample_parameters, args = parse_sample_template(tsv_file_path)
     labware_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
 
     # Pipettes
@@ -198,7 +84,7 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
     reagent_source_well = args.PCR_MixWell
     pcr_reagent_well_dia = reagent_labware[args.PCR_MixWell].diameter
     cone_vol = labware_cone_volume(args, reagent_labware)
-    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reagent_well_dia, cone_vol)
+    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reagent_well_dia, cone_vol, float(args.BottomOffset))
     reagent_aspirated = 0
 
     for sample_key in sample_data_dict:
@@ -213,13 +99,15 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
 
             reagent_aspirated += pcr_reagent_vol
             tip_height = \
-                res_tip_height(float(args.PCR_MixResVolume) - reagent_aspirated, pcr_reagent_well_dia, cone_vol)
+                res_tip_height(float(args.PCR_MixResVolume) - reagent_aspirated, pcr_reagent_well_dia, cone_vol,
+                               float(args.BottomOffset))
 
     # Setup the water control sample(s)
     if args.WaterControl:
         water_reservoir_dia = reagent_labware[args.WaterWell].diameter
         water_tip_height = \
-            res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
+            res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol,
+                           float(args.BottomOffset))
 
         slot = args.WaterControl.split(',')[0]
         well = args.WaterControl.split(',')[1]
@@ -248,65 +136,6 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
         reagent_pipette.drop_tip()
 
 
-def labware_cone_volume(args, labware_name):
-
-    cone_vol = 200
-    labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
-
-    if "e5ml_" in labware:
-
-        cone_vol = 1200
-
-    elif"1.5ml" in labware:
-
-        cone_vol = 450
-
-    return cone_vol
-
-
-def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction, touch=False):
-    """
-    Generic function to dispense material into designated well.
-    @param args:
-    @param loop_count:
-    @param pipette:
-    @param source_location:
-    @param destination_location:
-    @param volume:
-    @param NewTip:
-    @param MixReaction:
-    @param touch:
-    @return:
-    """
-    def tip_touch():
-        pipette.touch_tip(radius=0.75, v_offset=-8)
-
-    if NewTip:
-        if pipette.has_tip:
-            pipette.drop_tip()
-        pipette.pick_up_tip()
-
-    while loop_count > 0:
-        pipette.aspirate(volume, source_location)
-        tip_touch()
-        pipette.dispense(volume, destination_location)
-
-        loop_count -= 1
-        if not MixReaction:
-            pipette.blow_out()
-            if touch:
-                tip_touch()
-
-    if MixReaction:
-        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=5.0)
-        tip_touch()
-
-    if NewTip:
-        pipette.drop_tip()
-
-    return pipette
-
-
 def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_pipette):
     """
     Add water and template to the destination wells for the PCR.
@@ -323,7 +152,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     reagent_labware = labware_dict[args.ReagentSlot]
     water_reservoir_dia = reagent_labware[args.WaterWell].diameter
     cone_vol = labware_cone_volume(args, reagent_labware)
-    tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol)
+    tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol, float(args.BottomOffset))
     aspirated_water_vol = 0
 
     # Figure out volumes and dispense water into each destination well.
@@ -355,7 +184,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
                             sample_destination_labware[sample_dest_well], water_volume, NewTip=False, MixReaction=False)
 
             aspirated_water_vol += water_volume
-            tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol)
+            tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol,
+                                        float(args.BottomOffset))
 
         # Add template to all the destination wells for this sample.
         for sample_dest_well in sample_dest_wells:
@@ -364,7 +194,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
                 sample_pipette.pick_up_tip()
 
             dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                            sample_destination_labware[sample_dest_well], sample_volume, NewTip=False, MixReaction=False)
+                            sample_destination_labware[sample_dest_well], sample_volume, NewTip=False,
+                            MixReaction=False)
 
         # Drop any tips the pipettes might have.
         if left_pipette.has_tip:
