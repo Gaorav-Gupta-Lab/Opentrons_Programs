@@ -14,11 +14,12 @@ if not os.path.exists(template_parser_path):
         template_parser_path = \
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
-from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop
+from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, \
+    dispensing_loop, calculate_volumes
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.6.1',
+    'protocolName': 'ddPCR v0.6.2',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.9'
@@ -32,42 +33,6 @@ def plate_layout():
         for row in rows:
             plate_layout_by_column.append("{}{}".format(row, i+1))
     return plate_layout_by_column
-
-
-def calculate_volumes(args, sample_concentration):
-    """
-    Calculates volumes for dilution and distribution of sample.
-    Returns a list of tuples consisting of
-    (uL of sample to dilute, uL of water for dilution), (uL of diluted sample in reaction, uL of water in reaction)
-    @param args:
-    @param sample_concentration:
-    @return:
-    """
-
-    template_in_reaction = float(args.DNA_in_Reaction)
-    # Target Concentration is used to keep volumes > 1 uL
-    target_concentration = template_in_reaction/2
-    max_template_vol = \
-        round(float(args.PCR_Volume)-((float(args.PCR_Volume) / int(args.PCR_MixConcentration.split("x")[0])) + float(args.TargetVolume)), 2)
-
-    min_dna_in_reaction = template_in_reaction/max_template_vol
-
-    # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
-    if sample_concentration <= target_concentration:
-        sample_vol = template_in_reaction/sample_concentration
-        return 0, 0, sample_vol, round(max_template_vol-sample_vol, 2), max_template_vol
-
-    # This will test a series of dilutions up to a 1:200.
-    for i in range(50):
-        dilution = (i+1)*2
-        diluted_dna_conc = sample_concentration/dilution
-
-        if target_concentration >= diluted_dna_conc >= min_dna_in_reaction:
-            dilution_data = (1, dilution - 1)
-            diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
-            reaction_water_vol = max_template_vol-diluted_sample_vol
-
-            return dilution_data[0], dilution_data[1], diluted_sample_vol, reaction_water_vol, max_template_vol
 
 
 def sample_processing(args, sample_parameters):
@@ -87,11 +52,13 @@ def sample_processing(args, sample_parameters):
     for sample_key in sample_parameters:
         sample_name = sample_parameters[sample_key][2]
         sample_string = sample_name
-        concentration = float(sample_parameters[sample_key][3])
+        sample_concentration = float(sample_parameters[sample_key][3])
         targets = sample_parameters[sample_key][4].split(",")
         replicates = int(sample_parameters[sample_key][5])
+
         sample_vol, diluent_vol, diluted_sample_vol, reaction_water_vol, max_template_vol = \
-            calculate_volumes(args, concentration)
+            calculate_volumes(args, sample_concentration)
+
         diluted_sample_vol = round(diluted_sample_vol, 2)
         sample_wells = []
         for target in targets:
@@ -146,9 +113,9 @@ def run(ctx: protocol_api.ProtocolContext):
     ctx.comment("Begin {}".format(metadata['protocolName']))
 
     # Turn on rail lights and pause program so user can load robot deck.
-    ctx.set_rail_lights(True)
-    ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
-    ctx.home()
+    # ctx.set_rail_lights(True)
+    # ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
+    # ctx.home()
     ctx.set_rail_lights(False)
 
     # TSV file location on OT-2
@@ -355,7 +322,8 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
     reagent_labware = labware_dict[args.ReagentSlot]
     water_res_well_dia = reagent_labware[args.WaterWell].diameter
     cone_vol = labware_cone_volume(args, reagent_labware)
-    water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol)
+    water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
+                                      float(args.BottomOffset))
     dilution_plate_layout = plate_layout()
     dilution_well_index = 0
 

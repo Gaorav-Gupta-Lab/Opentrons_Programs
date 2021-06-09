@@ -175,6 +175,43 @@ def build_labware_dict(protocol, sample_parameters, slot_dict):
     return sample_reagent_labware_dict
 
 
+def calculate_volumes(args, sample_concentration):
+    """
+    Calculates volumes for dilution and distribution of sample.
+    Returns a list of tuples consisting of
+    (uL of sample to dilute, uL of water for dilution), (uL of diluted sample in reaction, uL of water in reaction)
+    @param args:
+    @param sample_concentration:
+    @return:
+    """
+    target_volume = float(getattr(args, "TargetVolume", 0))
+    template_in_reaction = float(args.DNA_in_Reaction)
+    # Target Concentration is used to keep volumes > 1 uL
+    target_concentration = template_in_reaction*0.8
+    max_template_vol = \
+        round(float(args.PCR_Volume)-((float(args.PCR_Volume) / int(args.PCR_MixConcentration.split("x")[0])) +
+                                      target_volume), 2)
+
+    min_dna_in_reaction = template_in_reaction/max_template_vol
+
+    # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
+    if sample_concentration <= target_concentration:
+        sample_vol = template_in_reaction/sample_concentration
+        return 0, 0, sample_vol, round(max_template_vol-sample_vol, 2), max_template_vol
+
+    # This will test a series of dilutions up to a 1:200.
+    for i in range(50):
+        dilution = (i+1)*2
+        diluted_dna_conc = sample_concentration/dilution
+
+        if target_concentration >= diluted_dna_conc >= min_dna_in_reaction:
+            dilution_data = (1, dilution - 1)
+            diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
+            reaction_water_vol = max_template_vol-diluted_sample_vol
+
+            return dilution_data[0], dilution_data[1], diluted_sample_vol, reaction_water_vol, max_template_vol
+
+
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
                     touch=False):
     """

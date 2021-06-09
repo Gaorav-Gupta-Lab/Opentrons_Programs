@@ -18,7 +18,7 @@ from Utilities import parse_sample_template, res_tip_height, labware_cone_volume
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v0.5.1',
+    'protocolName': 'Illumina Dual Indexing v0.5.2',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
     'apiLevel': '2.9'
@@ -156,9 +156,9 @@ def run(ctx: protocol_api.ProtocolContext):
     ctx.comment("Begin {}".format(metadata['protocolName']))
 
     # Turn on rail lights and pause program so user can load robot deck.
-    ctx.set_rail_lights(True)
-    ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
-    ctx.home()
+    # ctx.set_rail_lights(True)
+    # ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
+    # ctx.home()
     ctx.set_rail_lights(False)
 
     # TSV file location on OT-2
