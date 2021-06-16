@@ -14,8 +14,7 @@ if not os.path.exists(template_parser_path):
         template_parser_path = \
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
-from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, \
-    dispensing_loop, calculate_volumes
+from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes
 
 # metadata
 metadata = {
