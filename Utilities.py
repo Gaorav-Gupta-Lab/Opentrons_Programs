@@ -76,13 +76,16 @@ def parse_sample_template(input_file):
             # Skip any lines that are blank or comments.
             for i in range(7):
                 try:
-                    line[i] = line[i].split("#")[0]  # Strip out end of line comments and white space.
+                    line[i] = line[i].split("#")[0]  # Strip out end of line comments.
                 except IndexError:
                     continue
 
                 if i == 0 and "--" in line[0]:
                     key = line[0].strip('--')
-                    options_dictionary[key] = line[1]
+                    key_value = line[1]
+                    if "Target_" in key or "PositiveControl_" in key:
+                        key_value = (line[1], line[2], line[3])
+                    options_dictionary[key] = key_value
                 elif "--" not in line[0] and int(line[0]) < 12:
                     sample_key = line[0], line[1]
                     tmp_line.append(line[i])
@@ -184,32 +187,31 @@ def calculate_volumes(args, sample_concentration):
     @param sample_concentration:
     @return:
     """
-    target_volume = float(getattr(args, "TargetVolume", 0))
+    # reagent_volume = float(getattr(args, "ReagentVolume", 0))
     template_in_reaction = float(args.DNA_in_Reaction)
-    # Target Concentration is used to keep volumes > 1 uL
-    target_concentration = template_in_reaction*0.8
-    max_template_vol = \
-        round(float(args.PCR_Volume)-((float(args.PCR_Volume) / int(args.PCR_MixConcentration.split("x")[0])) +
-                                      target_volume), 2)
 
-    min_dna_in_reaction = template_in_reaction/max_template_vol
+    # Max Template Concentration is used to keep volumes > 1 uL
+    max_template_concentration = template_in_reaction*0.9
+    max_template_vol = float(args.PCR_Volume)-float(getattr(args, "ReagentVolume", 0))
+
+    # Get the minimum template concentration per uL allowed.
+    min_template_concentration = template_in_reaction/max_template_vol
 
     # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
-    if sample_concentration <= target_concentration:
-        sample_vol = template_in_reaction/sample_concentration
-        return 0, 0, sample_vol, round(max_template_vol-sample_vol, 2), max_template_vol
+    if sample_concentration <= max_template_concentration:
+        sample_vol = round(template_in_reaction/sample_concentration, 2)
+        return sample_vol, 0, 0, max_template_vol-sample_vol, max_template_vol
 
     # This will test a series of dilutions up to a 1:200.
     for i in range(50):
         dilution = (i+1)*2
         diluted_dna_conc = sample_concentration/dilution
 
-        if target_concentration >= diluted_dna_conc >= min_dna_in_reaction:
-            dilution_data = (1, dilution - 1)
+        if max_template_concentration >= diluted_dna_conc >= min_template_concentration:
             diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
             reaction_water_vol = max_template_vol-diluted_sample_vol
 
-            return dilution_data[0], dilution_data[1], diluted_sample_vol, reaction_water_vol, max_template_vol
+            return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
 
 
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
@@ -239,17 +241,20 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
 
     while loop_count > 0:
         pipette.aspirate(volume, source_location)
-        tip_touch()
-        pipette.dispense(volume, destination_location)
 
+        if touch:
+            tip_touch()
+
+        pipette.dispense(volume, destination_location)
         loop_count -= 1
+
         if not MixReaction:
             pipette.blow_out()
             if touch:
                 tip_touch()
 
     if MixReaction:
-        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=5.0)
+        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=4.5)
         pipette.blow_out()
         tip_touch()
 
