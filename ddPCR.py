@@ -20,7 +20,7 @@ from Utilities import parse_sample_template, res_tip_height, labware_cone_volume
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.7.0',
+    'protocolName': 'ddPCR v0.9.0',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.10'
@@ -85,28 +85,18 @@ def sample_processing(args, sample_parameters):
                 
         sample_data_dict[sample_key] = [sample_vol, diluent_vol, diluted_sample_vol, sample_wells]
 
-    # Define our positive control wells for the targets.
+    # Define our no template control wells for the targets.
     for target in target_well_dict:
-        loop_count = 2
-        positive_control = getattr(args, "PositiveControl_{}".format(target))
-        control_name = positive_control[2]
+        control_name = "Water"
         target = getattr(args, "Target_{}".format(target))
         target_name = target[1]
-
-        while loop_count > 0:
-            well = plate_layout_by_column[dest_well_count]
-            used_wells.append(well)
-            # target_well_dict[target].append(well)
-            row = well[0]
-            column = int(well[1:])-1
-            layout_data[row][column] = "{}|{}|NA|{}".format(control_name, target_name, max_template_vol)
-
-            if control_name == "Water":
-                water_well_dict[well] = max_template_vol
-
-            control_name = "Water"
-            dest_well_count += 1
-            loop_count -= 1
+        well = plate_layout_by_column[dest_well_count]
+        used_wells.append(well)
+        row = well[0]
+        column = int(well[1:])-1
+        layout_data[row][column] = "{}|{}|NA|{}".format(control_name, target_name, max_template_vol)
+        water_well_dict[well] = max_template_vol
+        dest_well_count += 1
 
     return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
 
@@ -228,33 +218,15 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, left_pipette, rig
 
     sample_destination_labware = labware_dict[args.PCR_PlateSlot]
 
-    # Dispense target primers into all wells
+    # Dispense reagents into all wells
     for target in target_well_dict:
         target_info = getattr(args, "Target_{}".format(target))
         reagent_slot = args.ReagentSlot
         reagent_source_well = target_info[0]
-        # reagent_name = target_info[1]
         reagent_well_vol = float(target_info[2])
         reagent_aspirated = float(args.ReagentVolume)
         reagent_source_labware = labware_dict[reagent_slot]
         target_well_list = target_well_dict[target]
-
-        # The penultimate well in the list is the positive control for the target primers
-        pos_control_dest_well = target_well_list[-2]
-        pos_control_info = getattr(args, "PositiveControl_{}".format(target))
-        pos_control_source_slot = pos_control_info[0]
-        pos_control_source_well = pos_control_info[1]
-        positive_control_source_labware = labware_dict[pos_control_source_slot]
-        positive_control_template_vol = float(args.PCR_Volume)-float(args.ReagentVolume)
-        control_pipette, control_loop, control_sample_vol = pipette_selection(left_pipette, right_pipette,
-                                                                              positive_control_template_vol)
-
-        dispensing_loop(args, control_loop, control_pipette,
-                        positive_control_source_labware[pos_control_source_well],
-                        sample_destination_labware[pos_control_dest_well], control_sample_vol,
-                        NewTip=True, MixReaction=False, touch=True)
-
-        # Now add PCR Reagents for this target
         reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
         reagent_cone_vol = labware_cone_volume(args, reagent_source_labware)
         reagent_pipette, reagent_loop, reagent_volume = \
