@@ -13,7 +13,7 @@ import math
 from collections import defaultdict
 from types import SimpleNamespace
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def labware_cone_volume(args, labware_name):
@@ -192,7 +192,7 @@ def calculate_volumes(args, sample_concentration):
 
     # Max Template Concentration is used to keep volumes > 1 uL
     max_template_concentration = template_in_reaction*0.9
-    max_template_vol = float(args.PCR_Volume)-float(getattr(args, "ReagentVolume", 0))
+    max_template_vol = round(float(args.PCR_Volume)-float(getattr(args, "ReagentVolume", 0)), 1)
 
     # Get the minimum template concentration per uL allowed.
     min_template_concentration = template_in_reaction/max_template_vol
