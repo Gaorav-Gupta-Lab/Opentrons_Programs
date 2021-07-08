@@ -16,7 +16,7 @@ if not os.path.exists(template_parser_path):
         template_parser_path = \
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
-from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes
+from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes, plate_layout
 
 # metadata
 metadata = {
@@ -25,15 +25,6 @@ metadata = {
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.10'
 }
-
-
-def plate_layout():
-    rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
-    plate_layout_by_column = []
-    for i in range(12):
-        for row in rows:
-            plate_layout_by_column.append("{}{}".format(row, i+1))
-    return plate_layout_by_column
 
 
 def sample_processing(args, sample_parameters):
@@ -83,7 +74,8 @@ def sample_processing(args, sample_parameters):
                 used_wells.append(well)
                 dest_well_count += 1
                 
-        sample_data_dict[sample_key] = [sample_vol, diluent_vol, diluted_sample_vol, sample_wells]
+        sample_data_dict[sample_key] = \
+            [round(sample_vol, 1), round(diluent_vol, 1), round(diluted_sample_vol, 1), sample_wells]
 
     # Define our no template control wells for the targets.
     for target in target_well_dict:
@@ -151,7 +143,8 @@ def run(ctx: protocol_api.ProtocolContext):
         for well in natsort.natsorted(layout_data):
             well_string = "\t".join(layout_data[well])
             plate_layout_string += "\n{}\t{}\t".format(well, well_string)
-        plate_layout_file = open("C:{0}Users{0}{1}{0}Documents{0}PlateLayout.tsv".format(os.sep, os.getlogin()), 'w')
+        plate_layout_file = \
+            open("C:{0}Users{0}{1}{0}Documents{0}ddPCR_PlateLayout.tsv".format(os.sep, os.getlogin()), 'w')
         plate_layout_file.write(plate_layout_string)
         plate_layout_file.close()
 

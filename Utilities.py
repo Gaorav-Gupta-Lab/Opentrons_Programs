@@ -16,6 +16,15 @@ from types import SimpleNamespace
 __version__ = "0.2.0"
 
 
+def plate_layout():
+    rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+    plate_layout_by_column = []
+    for i in range(12):
+        for row in rows:
+            plate_layout_by_column.append("{}{}".format(row, i+1))
+    return plate_layout_by_column
+
+
 def labware_cone_volume(args, labware_name):
     """
     Based on the labware and reservoir return the volume at which the cylinder shape transitions to the conical shape.
@@ -181,8 +190,8 @@ def build_labware_dict(protocol, sample_parameters, slot_dict):
 def calculate_volumes(args, sample_concentration):
     """
     Calculates volumes for dilution and distribution of sample.
-    Returns a list of tuples consisting of
-    (uL of sample to dilute, uL of water for dilution), (uL of diluted sample in reaction, uL of water in reaction)
+    Returns a list of tuples consisting of [(uL of sample to dilute, uL of water for dilution),
+     (uL of diluted sample in reaction, uL of water in reaction)]
     @param args:
     @param sample_concentration:
     @return:
