@@ -224,9 +224,10 @@ def calculate_volumes(args, sample_concentration):
 
 
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
-                    touch=False):
+                    touch=False, MixVolume=None):
     """
     Generic function to dispense material into designated well.
+    @param MixVolume:
     @param args:
     @param loop_count:
     @param pipette:
@@ -263,7 +264,10 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
                 tip_touch()
 
     if MixReaction:
-        pipette.mix(repetitions=4, volume=float(args.PCR_Volume)*0.7, rate=4.5)
+        v = float(args.PCR_Volume)
+        if MixVolume:
+            v = MixVolume
+        pipette.mix(repetitions=4, volume=v*0.7, rate=4.5)
         pipette.blow_out()
         tip_touch()
 

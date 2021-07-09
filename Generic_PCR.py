@@ -148,7 +148,7 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
                 dispensing_loop(args, diluent_loop, diluent_pipette,
                                 reagent_labware[args.WaterResWell].bottom(water_tip_height),
                                 dilution_labware[dilution_well], diluent_vol, NewTip=False, MixReaction=False,
-                                MixVolume=None, touch=True)
+                                touch=True)
 
                 mvol = sample_vol+diluent_vol
                 dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
