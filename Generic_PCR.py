@@ -3,7 +3,6 @@ import os
 import sys
 import platform
 from collections import defaultdict
-from contextlib import suppress
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 
@@ -16,7 +15,7 @@ if not os.path.exists(template_parser_path):
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
 
-from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes, plate_layout
+import Utilities
 
 
 # metadata
@@ -42,8 +41,8 @@ def run(ctx: protocol_api.ProtocolContext):
         # Temp TSV file location on Win10 Computers for simulation
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
-    sample_parameters, args = parse_sample_template(tsv_file_path)
-    labware_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
+    sample_parameters, args = Utilities.parse_sample_template(tsv_file_path)
+    labware_dict, left_tiprack_list, right_tiprack_list = Utilities.labware_parsing(args, ctx)
 
     # Pipettes
     left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)
@@ -90,12 +89,12 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
     if dilution_slot:
         dilution_labware = labware_dict[args.DilutionPlateSlot]
     water_res_well_dia = reagent_labware[args.WaterResWell].diameter
-    cone_vol = labware_cone_volume(args, reagent_labware)
-    water_tip_height = res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol, float(args.BottomOffset))
+    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+    water_tip_height = Utilities.res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol, float(args.BottomOffset))
     aspirated_water_vol = 0
     dilution_well_index = 0
     water_aspirated = 0
-    dilution_plate_layout = plate_layout()
+    dilution_plate_layout = Utilities.plate_layout()
     output_string = "Well\tSample\tDilution\tDispensed Volume\n"
 
     # Figure out volumes and dispense water into each destination well.
@@ -113,7 +112,7 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
 
         # Calculate any dilutions required.
         sample_vol, diluent_vol, diluted_sample_vol, reaction_water_vol, max_template_vol = \
-            calculate_volumes(args, sample_concentration)
+            Utilities.calculate_volumes(args, sample_concentration)
 
         dispensed_sample = sample_vol
         diluted_sample_vol = round(diluted_sample_vol, 2)
@@ -138,28 +137,29 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
             diluent_vol = diluent_vol * diluted_template_factor
             dilution = "1:{}".format(int((adjusted_sample_vol + diluent_vol)/adjusted_sample_vol))
             # Reset the pipettes for the new volumes
-            diluent_pipette, diluent_loop, diluent_vol = pipette_selection(left_pipette, right_pipette, diluent_vol)
+            diluent_pipette, diluent_loop, diluent_vol = \
+                Utilities.pipette_selection(left_pipette, right_pipette, diluent_vol)
             sample_pipette, sample_loop, sample_vol = \
-                pipette_selection(left_pipette, right_pipette, adjusted_sample_vol)
+                Utilities.pipette_selection(left_pipette, right_pipette, adjusted_sample_vol)
 
             # Make dilution, diluent first
             if dilution_slot:
                 dilution_well = dilution_plate_layout[dilution_well_index]
-                dispensing_loop(args, diluent_loop, diluent_pipette,
-                                reagent_labware[args.WaterResWell].bottom(water_tip_height),
-                                dilution_labware[dilution_well], diluent_vol, NewTip=False, MixReaction=False,
-                                touch=True)
+                Utilities.dispensing_loop(args, diluent_loop, diluent_pipette,
+                                          reagent_labware[args.WaterResWell].bottom(water_tip_height),
+                                          dilution_labware[dilution_well], diluent_vol, NewTip=False, MixReaction=False,
+                                          touch=True)
 
                 mvol = sample_vol+diluent_vol
-                dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                                dilution_labware[dilution_well], sample_vol, NewTip=False, MixReaction=True, touch=True,
-                                MixVolume=mvol)
+                Utilities.dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
+                                          dilution_labware[dilution_well], sample_vol, NewTip=False, MixReaction=True,
+                                          touch=True, MixVolume=mvol)
 
                 water_aspirated += diluent_vol
                 dilution_well_index += 1
                 sample_source = dilution_labware[dilution_well]
-                water_tip_height = res_tip_height(float(args.WaterResVol) - water_aspirated, water_res_well_dia, cone_vol,
-                                                  float(args.BottomOffset))
+                water_tip_height = Utilities.res_tip_height(float(args.WaterResVol) - water_aspirated, water_res_well_dia,
+                                                            cone_vol, float(args.BottomOffset))
 
             if diluent_pipette.has_tip:
                 diluent_pipette.drop_tip()
@@ -197,36 +197,39 @@ def dispense_pcr_reagents(args, labware_dict, left_pipette, right_pipette, aspir
 
     # Define PCR reagent pipette and reagent volume.
     reagent_pipette, reagent_loop, pcr_reagent_vol = \
-        pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume) * 0.5)
+        Utilities.pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume) * 0.5)
 
     reagent_labware = labware_dict[args.ReagentSlot]
     reagent_source_well = args.PCR_MixWell
     pcr_reagent_well_dia = reagent_labware[args.PCR_MixWell].diameter
-    cone_vol = labware_cone_volume(args, reagent_labware)
-    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reagent_well_dia, cone_vol, float(args.BottomOffset))
+    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+    tip_height = \
+        Utilities.res_tip_height(float(args.PCR_MixResVolume), pcr_reagent_well_dia, cone_vol, float(args.BottomOffset))
     reagent_aspirated = 0
 
     for well in sample_data_dict:
         reagent_dest_labware = sample_data_dict[well][3]
-        dispensing_loop(args, reagent_loop, reagent_pipette, reagent_labware[reagent_source_well].bottom(tip_height),
-                        reagent_dest_labware[well], pcr_reagent_vol, NewTip=True, MixReaction=True, touch=True)
+        Utilities.dispensing_loop(args, reagent_loop, reagent_pipette,
+                                  reagent_labware[reagent_source_well].bottom(tip_height),
+                                  reagent_dest_labware[well], pcr_reagent_vol, NewTip=True,
+                                  MixReaction=True, touch=True)
         reagent_aspirated += pcr_reagent_vol
         tip_height = \
-            res_tip_height(float(args.PCR_MixResVolume) - reagent_aspirated, pcr_reagent_well_dia, cone_vol,
-                           float(args.BottomOffset))
+            Utilities.res_tip_height(float(args.PCR_MixResVolume) - reagent_aspirated, pcr_reagent_well_dia, cone_vol,
+                                     float(args.BottomOffset))
 
     # Setup the water control sample(s)
     if args.WaterControl:
         water_reservoir_dia = reagent_labware[args.WaterResWell].diameter
         water_tip_height = \
-            res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol,
-                           float(args.BottomOffset))
+            Utilities.res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol,
+                                     float(args.BottomOffset))
 
         slot = args.WaterControl.split(',')[0]
         well = args.WaterControl.split(',')[1]
         neg_control_labware = labware_dict[slot]
         reagent_pipette, reagent_loop, pcr_reagent_vol = \
-            pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume) * 0.5)
+            Utilities.pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume) * 0.5)
         reagent_pipette.pick_up_tip()
         temp_loop = reagent_loop
 
@@ -263,18 +266,21 @@ def dispense_water(args, sample_data_dict, labware_dict, left_pipette, right_pip
     """
     reagent_labware = labware_dict[args.ReagentSlot]
     water_res_well_dia = reagent_labware[args.WaterResWell].diameter
-    cone_vol = labware_cone_volume(args, reagent_labware)
+    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
 
     for well in sample_data_dict:
         water_destination = sample_data_dict[well][3]
         water_aspirated = sample_data_dict[well][2]
-        water_pipette, water_loop, water_dispensed = pipette_selection(left_pipette, right_pipette, water_aspirated)
+        water_pipette, water_loop, water_dispensed = \
+            Utilities.pipette_selection(left_pipette, right_pipette, water_aspirated)
 
-        water_tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_res_well_dia, cone_vol,
-                                          float(args.BottomOffset))
+        water_tip_height = \
+            Utilities.res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_res_well_dia, cone_vol,
+                                     float(args.BottomOffset))
 
-        dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterResWell].bottom(water_tip_height),
-                        water_destination[well], water_dispensed, NewTip=False, MixReaction=False, touch=True)
+        Utilities.dispensing_loop(args, water_loop, water_pipette,
+                                  reagent_labware[args.WaterResWell].bottom(water_tip_height),
+                                  water_destination[well], water_dispensed, NewTip=False, MixReaction=False, touch=True)
 
         aspirated_water_vol += water_dispensed
 
@@ -303,10 +309,11 @@ def dispense_samples(args, sample_data_dict, left_pipette, right_pipette, aspira
         sample_source = sample_data_dict[well][0]
         dispensed_sample = sample_data_dict[well][1]
 
-        sample_pipette, sample_loop, sample_dispensed = pipette_selection(left_pipette, right_pipette, dispensed_sample)
+        sample_pipette, sample_loop, sample_dispensed = \
+            Utilities.pipette_selection(left_pipette, right_pipette, dispensed_sample)
 
-        dispensing_loop(args, sample_loop, sample_pipette, sample_source, sample_destination[well],
-                        sample_dispensed, NewTip=True, MixReaction=False, touch=True)
+        Utilities.dispensing_loop(args, sample_loop, sample_pipette, sample_source, sample_destination[well],
+                                  sample_dispensed, NewTip=True, MixReaction=False, touch=True)
 
     # Drop any tips the pipettes might have.
     if left_pipette.has_tip:

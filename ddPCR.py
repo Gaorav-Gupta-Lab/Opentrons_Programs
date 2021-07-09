@@ -7,7 +7,6 @@ from collections import defaultdict
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 # Check if we are on the OT-2, Robotron, or some other computer.
-import Tool_Box
 
 template_parser_path = "{0}var{0}lib{0}jupyter{0}notebooks".format(os.sep)
 if not os.path.exists(template_parser_path):
@@ -16,7 +15,8 @@ if not os.path.exists(template_parser_path):
         template_parser_path = \
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
-from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes, plate_layout
+import Utilities
+# from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes, plate_layout
 
 # metadata
 metadata = {
@@ -37,7 +37,7 @@ def sample_processing(args, sample_parameters):
     for k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
         layout_data[k] = ['', '', '', '', '', '', '', '', '', '', '', '', ]
 
-    plate_layout_by_column = plate_layout()
+    plate_layout_by_column = Utilities.plate_layout()
     used_wells = []
     dest_well_count = 0
 
@@ -49,7 +49,7 @@ def sample_processing(args, sample_parameters):
         replicates = int(sample_parameters[sample_key][5])
 
         sample_vol, diluent_vol, diluted_sample_vol, reaction_water_vol, max_template_vol = \
-            calculate_volumes(args, sample_concentration)
+            Utilities.calculate_volumes(args, sample_concentration)
 
         sample_wells = []
         for target in targets:
@@ -110,8 +110,8 @@ def run(ctx: protocol_api.ProtocolContext):
     if not os.path.isfile(tsv_file_path):
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
-    sample_parameters, args = parse_sample_template(tsv_file_path)
-    labware_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
+    sample_parameters, args = Utilities.parse_sample_template(tsv_file_path)
+    labware_dict, left_tiprack_list, right_tiprack_list = Utilities.labware_parsing(args, ctx)
 
     # Pipettes
     left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)
@@ -180,20 +180,22 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
         sample_destination_labware = labware_dict[args.PCR_PlateSlot]
         reagent_labware = labware_dict[args.ReagentSlot]
         water_res_well_dia = reagent_labware[args.WaterWell].diameter
-        cone_vol = labware_cone_volume(args, reagent_labware)
-        fill_pipette, fill_loop, fill_vol = pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume))
-        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
-                                          float(args.BottomOffset))
+        cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+        fill_pipette, fill_loop, fill_vol = \
+            Utilities.pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume))
+        water_tip_height = \
+            Utilities.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
+                                     float(args.BottomOffset))
 
         for i in range(wells_remaining):
             blank_well = "{}{}".format(row_list[i+row_index+1], column)
-            dispensing_loop(args, fill_loop, fill_pipette,
-                            reagent_labware[args.WaterWell].bottom(water_tip_height),
-                            sample_destination_labware[blank_well], fill_vol,
-                            NewTip=False, MixReaction=False)
+            Utilities.dispensing_loop(args, fill_loop, fill_pipette,
+                                      reagent_labware[args.WaterWell].bottom(water_tip_height),
+                                      sample_destination_labware[blank_well], fill_vol,
+                                      NewTip=False, MixReaction=False)
             water_aspirated = water_aspirated+fill_vol
-            water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
-                                              float(args.BottomOffset))
+            water_tip_height = Utilities.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia,
+                                                        cone_vol, float(args.BottomOffset))
         fill_pipette.drop_tip()
 
 
@@ -272,10 +274,12 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
             continue
 
         # Define the pipette for dispensing the water.
-        water_pipette, water_loop, water_volume = pipette_selection(left_pipette, right_pipette, water_volume)
+        water_pipette, water_loop, water_volume = \
+            Utilities.pipette_selection(left_pipette, right_pipette, water_volume)
 
-        dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(water_tip_height),
-                        sample_destination_labware[well], water_volume, NewTip=False, MixReaction=False, touch=True)
+        Utilities.dispensing_loop(args, water_loop, water_pipette,
+                                  reagent_labware[args.WaterWell].bottom(water_tip_height),
+                                  sample_destination_labware[well], water_volume, NewTip=False, MixReaction=False, touch=True)
 
         water_aspirated += water_volume
         water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
