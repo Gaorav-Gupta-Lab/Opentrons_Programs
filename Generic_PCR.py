@@ -20,7 +20,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'Generic PCR v0.8.0',
+    'protocolName': 'Generic PCR v0.8.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Sets up a PCR from concentrated template',
     'apiLevel': '2.10'
@@ -128,10 +128,10 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
             diluted_template_needed = diluted_sample_vol * (len(sample_dest_wells) + 1)
             diluted_template_on_hand = sample_vol + diluent_vol
             diluted_template_factor = 1.0
-            if diluted_template_needed <= diluted_template_on_hand:
-                diluted_template_factor = diluted_template_needed / diluted_template_on_hand
+            if diluted_template_needed <= (diluted_template_on_hand+5):
+                diluted_template_factor = diluted_template_on_hand/diluted_template_needed
                 if diluted_template_factor <= 1.5 and (sample_vol * diluted_template_factor) < 10:
-                    diluted_template_factor = 2.0
+                    diluted_template_factor = 2.2
 
             adjusted_sample_vol = sample_vol * diluted_template_factor
             diluent_vol = diluent_vol * diluted_template_factor
@@ -158,8 +158,9 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
                 water_aspirated += diluent_vol
                 dilution_well_index += 1
                 sample_source = dilution_labware[dilution_well]
-                water_tip_height = Utilities.res_tip_height(float(args.WaterResVol) - water_aspirated, water_res_well_dia,
-                                                            cone_vol, float(args.BottomOffset))
+                water_tip_height = \
+                    Utilities.res_tip_height(float(args.WaterResVol) - water_aspirated, water_res_well_dia,
+                                             cone_vol, float(args.BottomOffset))
 
             if diluent_pipette.has_tip:
                 diluent_pipette.drop_tip()

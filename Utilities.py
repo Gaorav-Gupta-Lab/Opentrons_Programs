@@ -13,7 +13,7 @@ import math
 from collections import defaultdict
 from types import SimpleNamespace
 
-__version__ = "0.2.0"
+__version__ = "0.2.2"
 
 
 def plate_layout():
@@ -199,9 +199,13 @@ def calculate_volumes(args, sample_concentration):
     # reagent_volume = float(getattr(args, "ReagentVolume", 0))
     template_in_reaction = float(args.DNA_in_Reaction)
 
+    reagent_volume = float(args.PCR_Volume)*0.5
     # Max Template Concentration is used to keep volumes > 1 uL
     max_template_concentration = template_in_reaction*0.9
-    max_template_vol = round(float(args.PCR_Volume)-float(getattr(args, "ReagentVolume", 0)), 1)
+    if getattr(args, "ReagentVolume", None):
+        reagent_volume = float(getattr(args, "ReagentVolume"))
+
+    max_template_vol = round(float(args.PCR_Volume)-reagent_volume, 1)
 
     # Get the minimum template concentration per uL allowed.
     min_template_concentration = template_in_reaction/max_template_vol
