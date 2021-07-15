@@ -14,14 +14,15 @@ if not os.path.exists(template_parser_path):
         template_parser_path = \
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
-from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop
+
+import Utilities
 
 # metadata
 metadata = {
     'protocolName': 'Illumina Dual Indexing v0.5.2',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
-    'apiLevel': '2.9'
+    'apiLevel': '2.11'
 }
 
 
@@ -31,9 +32,10 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
     pcr_reagent_well = args.PCR_MixWell
     reagent_labware = labware_dict[args.ReagentSlot]
     pcr_reservoir_dia = reagent_labware[args.PCR_MixWell].diameter
-    cone_vol = labware_cone_volume(args, reagent_labware)
-    tip_height = res_tip_height(float(args.PCR_MixResVolume), pcr_reservoir_dia, cone_vol, float(args.BottomOffset))
-    pcr_pipette, pcr_loop, pcr_reagent_vol = pipette_selection(left_pipette, right_pipette, pcr_reagent_vol)
+    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+    tip_height = \
+        Utilities.res_tip_height(float(args.PCR_MixResVolume), pcr_reservoir_dia, cone_vol, float(args.BottomOffset))
+    pcr_pipette, pcr_loop, pcr_reagent_vol = Utilities.pipette_selection(left_pipette, right_pipette, pcr_reagent_vol)
     aspirated_vol = 0
 
     for sample_key in sample_dest_dict:
@@ -42,14 +44,15 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
         sample_destination_labware = labware_dict[sample_dest_slot]
 
         pcr_pipette = \
-            dispensing_loop(args, pcr_loop, pcr_pipette, pcr_reagent_labware[pcr_reagent_well].bottom(tip_height),
-                            sample_destination_labware[sample_dest_well], pcr_reagent_vol,
-                            NewTip=True, MixReaction=True)
+            Utilities.dispensing_loop(args, pcr_loop, pcr_pipette,
+                                      pcr_reagent_labware[pcr_reagent_well].bottom(tip_height),
+                                      sample_destination_labware[sample_dest_well], pcr_reagent_vol,
+                                      NewTip=True, MixReaction=True)
 
         aspirated_vol += pcr_reagent_vol
 
-        tip_height = res_tip_height(float(args.PCR_MixResVolume)-aspirated_vol, pcr_reservoir_dia, cone_vol,
-                                    float(args.BottomOffset))
+        tip_height = Utilities.res_tip_height(float(args.PCR_MixResVolume)-aspirated_vol, pcr_reservoir_dia, cone_vol,
+                                              float(args.BottomOffset))
 
 
 def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_pipette):
@@ -77,8 +80,9 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     reaction_vol = float(args.PCR_Volume)
     reagent_labware = labware_dict[args.ReagentSlot]
     water_reservoir_dia = reagent_labware[args.WaterWell].diameter
-    cone_vol = labware_cone_volume(args, reagent_labware)
-    tip_height = res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol, float(args.BottomOffset))
+    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+    tip_height = \
+        Utilities.res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol, float(args.BottomOffset))
     aspirated_water_vol = 0
     bottom_offset = float(args.BottomOffset)
 
@@ -96,17 +100,19 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         water_volume = (0.5*reaction_vol)-sample_volume
 
         # Define the pipette for dispensing the water.
-        water_pipette, water_loop, water_volume = pipette_selection(left_pipette, right_pipette, water_volume)
+        water_pipette, water_loop, water_volume = Utilities.pipette_selection(left_pipette, right_pipette, water_volume)
 
         sample_dest_dict[sample_key].append((sample_dest_slot, sample_dest_well, sample_volume))
 
         # Add water to all the destination wells for this sample.
-        dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(tip_height),
-                        sample_destination_labware[sample_dest_well], water_volume, NewTip=False, MixReaction=False)
+        Utilities.dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(tip_height),
+                                  sample_destination_labware[sample_dest_well], water_volume, NewTip=False,
+                                  MixReaction=False)
 
         aspirated_water_vol += water_volume
-        tip_height = res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol,
-                                    float(args.BottomOffset))
+        tip_height = \
+            Utilities.res_tip_height(float(args.WaterResVol) - aspirated_water_vol, water_reservoir_dia, cone_vol,
+                                     float(args.BottomOffset))
 
     # Drop any tips the pipettes might have.
     if left_pipette.has_tip:
@@ -127,27 +133,29 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         sample_volume = sample_dest_dict[sample_key][0][2]
 
         sample_pipette, sample_loop, sample_volume = \
-            pipette_selection(left_pipette, right_pipette, sample_volume)
+            Utilities.pipette_selection(left_pipette, right_pipette, sample_volume)
 
         # Add template to the destination well for this sample.
-        dispensing_loop(args, sample_loop, sample_pipette,
-                        sample_source_labware[sample_source_well].bottom(bottom_offset),
-                        sample_destination_labware[sample_dest_well], sample_volume, NewTip=True, MixReaction=False,
-                        touch=True)
+        Utilities.dispensing_loop(args, sample_loop, sample_pipette,
+                                  sample_source_labware[sample_source_well].bottom(bottom_offset),
+                                  sample_destination_labware[sample_dest_well], sample_volume, NewTip=True,
+                                  MixReaction=False, touch=True)
 
         # Determine primer volumes and dispense them.
         primer_volume = (float(args.PCR_Volume)/50) * 1.25
         primer_pipette, primer_loop, primer_volume = \
-            pipette_selection(left_pipette, right_pipette, primer_volume)
+            Utilities.pipette_selection(left_pipette, right_pipette, primer_volume)
 
         # D500 primers
-        dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d500]].bottom(bottom_offset),
-                        sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False,
-                        touch=True)
+        Utilities.dispensing_loop(args, primer_loop, primer_pipette,
+                                  primer_labware[primer_dict[d500]].bottom(bottom_offset),
+                                  sample_destination_labware[sample_dest_well], primer_volume, NewTip=True,
+                                  MixReaction=False, touch=True)
         # D700 primers
-        dispensing_loop(args, primer_loop, primer_pipette, primer_labware[primer_dict[d700]].bottom(bottom_offset),
-                        sample_destination_labware[sample_dest_well], primer_volume, NewTip=True, MixReaction=False,
-                        touch=True,)
+        Utilities.dispensing_loop(args, primer_loop, primer_pipette,
+                                  primer_labware[primer_dict[d700]].bottom(bottom_offset),
+                                  sample_destination_labware[sample_dest_well], primer_volume, NewTip=True,
+                                  MixReaction=False, touch=True,)
 
     return sample_dest_dict
 
@@ -167,8 +175,8 @@ def run(ctx: protocol_api.ProtocolContext):
         # Temp TSV file location on Win10 Computers for simulation
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
-    sample_parameters, args = parse_sample_template(tsv_file_path)
-    labware_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
+    sample_parameters, args = Utilities.parse_sample_template(tsv_file_path)
+    labware_dict, left_tiprack_list, right_tiprack_list = Utilities.labware_parsing(args, ctx)
 
     # Pipettes
     left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)

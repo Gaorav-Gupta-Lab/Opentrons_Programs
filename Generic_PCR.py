@@ -23,7 +23,7 @@ metadata = {
     'protocolName': 'Generic PCR v0.8.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Sets up a PCR from concentrated template',
-    'apiLevel': '2.10'
+    'apiLevel': '2.11'
 }
 
 
@@ -131,7 +131,7 @@ def process_samples(args, ctx, sample_parameters, labware_dict, left_pipette, ri
             if diluted_template_needed <= (diluted_template_on_hand+5):
                 diluted_template_factor = diluted_template_on_hand/diluted_template_needed
                 if diluted_template_factor <= 1.5 and (sample_vol * diluted_template_factor) < 10:
-                    diluted_template_factor = 2.2
+                    diluted_template_factor = 2.5
 
             adjusted_sample_vol = sample_vol * diluted_template_factor
             diluent_vol = diluent_vol * diluted_template_factor
