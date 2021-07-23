@@ -259,7 +259,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         if touch:
             tip_touch()
 
-        pipette.dispense(volume, destination_location)
+        pipette.dispense(volume, destination_location, rate=0.75)
         loop_count -= 1
 
         if not MixReaction:
@@ -271,7 +271,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         v = float(args.PCR_Volume)
         if MixVolume:
             v = MixVolume
-        pipette.mix(repetitions=4, volume=v*0.7, rate=4.5)
+        pipette.mix(repetitions=4, volume=v*0.7, rate=2.0)
         pipette.blow_out()
         tip_touch()
 
