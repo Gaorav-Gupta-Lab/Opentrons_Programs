@@ -19,7 +19,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v0.5.2',
+    'protocolName': 'Illumina Dual Indexing v0.5.3',
     'author': 'Dennis Simpson',
     'description': 'Add Illumina dual indexing to library',
     'apiLevel': '2.11'
@@ -79,7 +79,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
     sample_mass = float(args.DNA_in_Reaction)
     reaction_vol = float(args.PCR_Volume)
     reagent_labware = labware_dict[args.ReagentSlot]
-    water_reservoir_dia = reagent_labware[args.WaterWell].diameter
+    water_reservoir_dia = reagent_labware[args.WaterResWell].diameter
     cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
     tip_height = \
         Utilities.res_tip_height(float(args.WaterResVol), water_reservoir_dia, cone_vol, float(args.BottomOffset))
@@ -105,7 +105,7 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
         sample_dest_dict[sample_key].append((sample_dest_slot, sample_dest_well, sample_volume))
 
         # Add water to all the destination wells for this sample.
-        Utilities.dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterWell].bottom(tip_height),
+        Utilities.dispensing_loop(args, water_loop, water_pipette, reagent_labware[args.WaterResWell].bottom(tip_height),
                                   sample_destination_labware[sample_dest_well], water_volume, NewTip=False,
                                   MixReaction=False)
 
