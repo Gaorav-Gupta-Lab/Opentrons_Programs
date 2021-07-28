@@ -271,7 +271,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         v = float(args.PCR_Volume)
         if MixVolume:
             v = MixVolume
-        pipette.mix(repetitions=4, volume=v*0.7, rate=2.0)
+        pipette.mix(repetitions=4, volume=v*0.65, rate=1.2)
         pipette.blow_out()
         tip_touch()
 
