@@ -16,11 +16,10 @@ if not os.path.exists(template_parser_path):
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
 sys.path.insert(0, template_parser_path)
 import Utilities
-# from Utilities import parse_sample_template, res_tip_height, labware_cone_volume, labware_parsing, pipette_selection, dispensing_loop, calculate_volumes, plate_layout
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.9.0',
+    'protocolName': 'ddPCR v0.9.1',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.11'
@@ -260,9 +259,10 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
     @return:
     """
     reagent_labware = labware_dict[args.ReagentSlot]
-    cone_vol = labware_cone_volume(args, reagent_labware)
+    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
     water_res_well_dia = reagent_labware[args.WaterWell].diameter
-    water_tip_height = res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol, float(args.BottomOffset))
+    water_tip_height = Utilities.res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol,
+                                                float(args.BottomOffset))
     sample_destination_labware = labware_dict[args.PCR_PlateSlot]
     water_aspirated = 0
 
@@ -279,11 +279,12 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
 
         Utilities.dispensing_loop(args, water_loop, water_pipette,
                                   reagent_labware[args.WaterWell].bottom(water_tip_height),
-                                  sample_destination_labware[well], water_volume, NewTip=False, MixReaction=False, touch=True)
+                                  sample_destination_labware[well], water_volume, NewTip=False, MixReaction=False,
+                                  touch=True)
 
         water_aspirated += water_volume
-        water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
-                                          float(args.BottomOffset))
+        water_tip_height = Utilities.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia,
+                                                    cone_vol, float(args.BottomOffset))
 
     if left_pipette.has_tip:
         left_pipette.drop_tip()
