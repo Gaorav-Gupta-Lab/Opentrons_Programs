@@ -19,7 +19,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.9.1',
+    'protocolName': 'ddPCR v0.9.2',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.11'
@@ -333,7 +333,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
                 Utilities.dispensing_loop(args, sample_loop, sample_pipette,
                                           sample_source_labware[sample_source_well],
                                           sample_destination_labware[well], sample_vol,
-                                          NewTip=True, MixReaction=False)
+                                          NewTip=True, MixReaction=False, touch=True)
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
