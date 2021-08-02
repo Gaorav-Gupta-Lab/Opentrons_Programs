@@ -19,7 +19,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.9.2',
+    'protocolName': 'ddPCR v0.9.3',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.11'
@@ -39,6 +39,7 @@ def sample_processing(args, sample_parameters):
     plate_layout_by_column = Utilities.plate_layout()
     used_wells = []
     dest_well_count = 0
+    target_list = []
 
     for sample_key in sample_parameters:
         sample_name = sample_parameters[sample_key][2]
@@ -52,6 +53,7 @@ def sample_processing(args, sample_parameters):
 
         sample_wells = []
         for target in targets:
+            target_list.append(target)
             target_name = getattr(args, "Target_{}".format(target))[1]
             for i in range(replicates):
                 well = plate_layout_by_column[dest_well_count]
@@ -78,9 +80,14 @@ def sample_processing(args, sample_parameters):
 
     # Define our no template control wells for the targets.
     for target in target_well_dict:
+        target_list.append(target)
+    target_list = list(set(target_list))
+
+    for target in target_list:
         control_name = "Water"
-        target = getattr(args, "Target_{}".format(target))
-        target_name = target[1]
+        target_data = getattr(args, "Target_{}".format(target))
+        target_name = target_data[1]
+
         well = plate_layout_by_column[dest_well_count]
         used_wells.append(well)
         row = well[0]
@@ -88,6 +95,8 @@ def sample_processing(args, sample_parameters):
         layout_data[row][column] = "{}|{}|NA|{}".format(control_name, target_name, max_template_vol)
         water_well_dict[well] = max_template_vol
         dest_well_count += 1
+
+        target_well_dict[target].append(well)
 
     return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
 
