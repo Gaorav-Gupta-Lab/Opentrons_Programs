@@ -19,7 +19,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'ddPCR v0.9.3',
+    'protocolName': 'ddPCR v0.9.5',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
     'apiLevel': '2.11'
@@ -159,10 +159,10 @@ def run(ctx: protocol_api.ProtocolContext):
     # Now do the actual dispensing.
     water_aspirated = dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipette)
 
+    dispense_reagent_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
+
     water_aspirated = dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated)
-
-    dispense_reagent_mix(args, labware_dict, target_well_dict, left_pipette, right_pipette)
 
     fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
 
@@ -242,7 +242,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, left_pipette, rig
             Utilities.dispensing_loop(args, reagent_loop, reagent_pipette,
                                       reagent_source_labware[reagent_source_well].bottom(reagent_tip_height),
                                       sample_destination_labware[well], reagent_volume,
-                                      NewTip=True, MixReaction=True, touch=True)
+                                      NewTip=False, MixReaction=False, touch=True)
 
             reagent_aspirated += reagent_volume
 
@@ -342,7 +342,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
                 Utilities.dispensing_loop(args, sample_loop, sample_pipette,
                                           sample_source_labware[sample_source_well],
                                           sample_destination_labware[well], sample_vol,
-                                          NewTip=True, MixReaction=False, touch=True)
+                                          NewTip=True, MixReaction=True, touch=True)
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
@@ -385,8 +385,8 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
 
             Utilities.dispensing_loop(args, sample_loop, sample_pipette,
                                       dilution_labware[dilution_well].bottom(args.BottomOffset),
-                                      sample_destination_labware[well], diluted_sample_vol, NewTip=False,
-                                      MixReaction=False)
+                                      sample_destination_labware[well], diluted_sample_vol, NewTip=True,
+                                      MixReaction=True)
 
         if sample_pipette.has_tip:
             sample_pipette.drop_tip()
