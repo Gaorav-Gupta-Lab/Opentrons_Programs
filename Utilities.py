@@ -13,7 +13,7 @@ import math
 from collections import defaultdict
 from types import SimpleNamespace
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 
 def plate_layout():
@@ -271,7 +271,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         v = float(args.PCR_Volume)
         if MixVolume:
             v = MixVolume
-        pipette.mix(repetitions=4, volume=v*0.65, rate=1.2)
+        pipette.mix(repetitions=4, volume=v*0.65, rate=2.0)
         pipette.blow_out()
         tip_touch()
 
