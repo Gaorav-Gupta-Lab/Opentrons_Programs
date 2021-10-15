@@ -13,7 +13,7 @@ import math
 from collections import defaultdict
 from types import SimpleNamespace
 
-__version__ = "0.2.3"
+__version__ = "0.2.5"
 
 
 def plate_layout():
@@ -168,7 +168,7 @@ def pipette_selection(left_pipette, right_pipette, volume):
         volume = volume * 0.5
         loop = 2
 
-    return pipette, loop, volume
+    return pipette, loop, round(volume, 1)
 
 
 def build_labware_dict(protocol, sample_parameters, slot_dict):
@@ -201,17 +201,20 @@ def calculate_volumes(args, sample_concentration):
 
     reagent_volume = float(args.PCR_Volume)*0.5
     # Max Template Concentration is used to keep volumes > 1 uL
-    max_template_concentration = template_in_reaction*0.9
+    # max_template_concentration = template_in_reaction*0.9
     if getattr(args, "ReagentVolume", None):
         reagent_volume = float(getattr(args, "ReagentVolume"))
 
     max_template_vol = round(float(args.PCR_Volume)-reagent_volume, 1)
 
     # Get the minimum template concentration per uL allowed.
-    min_template_concentration = template_in_reaction/max_template_vol
+    # min_template_concentration = template_in_reaction/max_template_vol
 
     # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
-    if sample_concentration <= max_template_concentration:
+    # if sample_concentration <= max_template_concentration:
+
+    # If at least 2 uL of sample is needed then no dilution is necessary
+    if template_in_reaction/sample_concentration >= 2:
         sample_vol = round(template_in_reaction/sample_concentration, 2)
         return sample_vol, 0, 0, max_template_vol-sample_vol, max_template_vol
 
@@ -220,7 +223,10 @@ def calculate_volumes(args, sample_concentration):
         dilution = (i+1)*2
         diluted_dna_conc = sample_concentration/dilution
 
-        if max_template_concentration >= diluted_dna_conc >= min_template_concentration:
+        # if max_template_concentration >= diluted_dna_conc >= min_template_concentration:
+
+        # Want to pipette at least 2 uL of diluted sample per well
+        if 2 <= template_in_reaction/diluted_dna_conc <= max_template_vol:
             diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
             reaction_water_vol = max_template_vol-diluted_sample_vol
 
@@ -228,9 +234,10 @@ def calculate_volumes(args, sample_concentration):
 
 
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
-                    touch=False, MixVolume=None):
+                    touch=False, MixVolume=None, speed=None):
     """
     Generic function to dispense material into designated well.
+    @param speed:
     @param MixVolume:
     @param args:
     @param loop_count:
@@ -246,6 +253,9 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
     def tip_touch():
         pipette.touch_tip(radius=0.75, v_offset=-8)
 
+    if not speed:
+        speed = 1
+
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
@@ -254,7 +264,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         pipette.pick_up_tip()
 
     while loop_count > 0:
-        pipette.aspirate(volume, source_location)
+        pipette.aspirate(volume, source_location, rate=speed)
 
         if touch:
             tip_touch()

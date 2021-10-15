@@ -22,7 +22,7 @@ metadata = {
     'protocolName': 'ddPCR v0.9.6',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
-    'apiLevel': '2.11'
+    'apiLevel': '2.12'
 }
 
 
@@ -243,7 +243,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, left_pipette, rig
             Utilities.dispensing_loop(args, reagent_loop, reagent_pipette,
                                       reagent_source_labware[reagent_source_well].bottom(reagent_tip_height),
                                       sample_destination_labware[well], reagent_volume,
-                                      NewTip=False, MixReaction=False, touch=True)
+                                      NewTip=False, MixReaction=False, touch=True, speed=0.75)
 
             reagent_aspirated += reagent_volume
 
@@ -348,16 +348,18 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
-        diluted_template_needed = diluted_sample_vol*(len(sample_dest_wells)+1)
+        diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), 2)
+        diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), 2)
+        '''
         diluted_template_on_hand = sample_vol+diluent_vol
         diluted_template_factor = 1.0
         if diluted_template_needed <= diluted_template_on_hand:
             diluted_template_factor = diluted_template_needed/diluted_template_on_hand
             if diluted_template_factor <= 1.5 and (sample_vol * diluted_template_factor) < 10:
                 diluted_template_factor = 2.0
-
-        adjusted_sample_vol = sample_vol * diluted_template_factor
-        diluent_vol = diluent_vol*diluted_template_factor
+        '''
+        adjusted_sample_vol = round((sample_vol * diluted_template_factor),1)
+        diluent_vol = round((diluent_vol*diluted_template_factor), 1)
 
         # Reset the pipettes for the new volumes
         diluent_pipette, diluent_loop, diluent_vol = \
