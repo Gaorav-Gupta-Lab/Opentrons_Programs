@@ -22,7 +22,7 @@ metadata = {
     'protocolName': 'ddPCR v0.9.6',
     'author': 'Dennis Simpson',
     'description': 'Setup a ddPCR using either 2x or 4x SuperMix',
-    'apiLevel': '2.12'
+    'apiLevel': '2.11'
 }
 
 
@@ -243,7 +243,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, left_pipette, rig
             Utilities.dispensing_loop(args, reagent_loop, reagent_pipette,
                                       reagent_source_labware[reagent_source_well].bottom(reagent_tip_height),
                                       sample_destination_labware[well], reagent_volume,
-                                      NewTip=False, MixReaction=False, touch=True, speed=0.75)
+                                      NewTip=False, MixReaction=False, touch=True, MixVolume=None, speed=0.75)
 
             reagent_aspirated += reagent_volume
 
