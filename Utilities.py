@@ -234,7 +234,7 @@ def calculate_volumes(args, sample_concentration):
 
 
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
-                    speed=None, touch=False, MixVolume=None):
+                    touch=False, MixVolume=None):
     """
     Generic function to dispense material into designated well.
     @param speed:
@@ -253,9 +253,6 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
     def tip_touch():
         pipette.touch_tip(radius=0.75, v_offset=-8)
 
-    if not speed:
-        speed = 1
-
     if NewTip:
         if pipette.has_tip:
             pipette.drop_tip()
@@ -264,7 +261,7 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         pipette.pick_up_tip()
 
     while loop_count > 0:
-        pipette.aspirate(volume, source_location, rate=speed)
+        pipette.aspirate(volume, source_location, rate=0.75)
 
         if touch:
             tip_touch()
