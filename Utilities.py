@@ -234,7 +234,7 @@ def calculate_volumes(args, sample_concentration):
 
 
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
-                    touch=False, MixVolume=None, speed=None):
+                    speed=None, touch=False, MixVolume=None):
     """
     Generic function to dispense material into designated well.
     @param speed:

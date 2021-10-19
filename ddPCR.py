@@ -399,7 +399,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
 
 
 if __name__ == "__main__":
-    protocol_file = open('ddPCR_v2.py')
+    protocol_file = open('ddPCR.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
     run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
