@@ -196,12 +196,10 @@ def calculate_volumes(args, sample_concentration):
     @param sample_concentration:
     @return:
     """
-    # reagent_volume = float(getattr(args, "ReagentVolume", 0))
-    template_in_reaction = float(args.DNA_in_Reaction)
 
+    template_in_reaction = float(args.DNA_in_Reaction)
     reagent_volume = float(args.PCR_Volume)*0.5
-    # Max Template Concentration is used to keep volumes > 1 uL
-    # max_template_concentration = template_in_reaction*0.9
+
     if getattr(args, "ReagentVolume", None):
         reagent_volume = float(getattr(args, "ReagentVolume"))
 
