@@ -5,24 +5,41 @@ Dennis Simpson
 University of North Carolina at Chapel Hill
 Chapel Hill NC, 27599
 
-@copyright 2021
+@copyright 2022
 
 """
 import csv
 import math
+import os
 from collections import defaultdict
 from types import SimpleNamespace
 
-__version__ = "0.2.5"
+__version__ = "1.0.0"
 
 
-def plate_layout():
+def plate_layout(labware):
+    """
+    Define the destination layout for the reactions.  Can be 96-well plate or 8-well strip tubes
+    @param labware:
+    @return:
+    """
+
+    layout_data = defaultdict(list)
+    for k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
+        layout_data[k] = ['', '', '', '', '', '', '', '', '', '', '', '', ]
+
+    if labware == "stacked_96_well":
+        column_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    elif labware == "8_well_strip_tubes_200ul":
+        column_index = [1, 3, 5, 7, 9, 11, 12]
+
     rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     plate_layout_by_column = []
-    for i in range(12):
+    for i in column_index:
         for row in rows:
-            plate_layout_by_column.append("{}{}".format(row, i+1))
-    return plate_layout_by_column
+            plate_layout_by_column.append("{}{}".format(row, i))
+
+    return plate_layout_by_column, layout_data
 
 
 def labware_cone_volume(args, labware_name):
@@ -77,6 +94,9 @@ def parse_sample_template(input_file):
     sample_dictionary = defaultdict(list)
     index_file = list(csv.reader(open(input_file), delimiter='\t'))
     for line in index_file:
+        if line_num == 0:
+            options_dictionary["Version"] = line[1]
+            options_dictionary["Template"] = line[0].strip("#")
         line_num += 1
         col_count = len(line)
         tmp_line = []
@@ -103,10 +123,35 @@ def parse_sample_template(input_file):
     return sample_dictionary, SimpleNamespace(**options_dictionary)
 
 
+def initialize_system(ctx):
+    # TSV file location on OT-2
+    tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
+    if not os.path.isfile(tsv_file_path):
+        # Temp TSV file location on Win10 Computers for simulation
+        tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
+
+    sample_parameters, args = parse_sample_template(tsv_file_path)
+    labware_dict, slot_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
+
+    # Pipettes
+    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)
+    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tiprack_list)
+
+    # Set the location of the first tip in box.
+    left_pipette.starting_tip = left_tiprack_list[0].wells_by_name()[args.LeftPipetteFirstTip.upper()]
+    right_pipette.starting_tip = right_tiprack_list[0].wells_by_name()[args.RightPipetteFirstTip.upper()]
+    return_list = \
+        [args, tsv_file_path, sample_parameters, labware_dict, left_tiprack_list, right_tiprack_list, left_pipette,
+         right_pipette, left_pipette.starting_tip, right_pipette.starting_tip, slot_dict]
+
+    return return_list
+
+
 def labware_parsing(args, ctx):
     # Extract Slot information
     slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
     labware_dict = {}
+    slot_dict = {}
     tipbox_dict = \
         {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
          "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
@@ -117,13 +162,14 @@ def labware_parsing(args, ctx):
     for i in range(len(slot_list)):
         labware = getattr(args, "{}".format(slot_list[i]))
         if labware:
+            slot_dict[str(i + 1)] = labware
             labware_dict[str(i + 1)] = ctx.load_labware(labware, str(i + 1))
             if labware in tipbox_dict[args.LeftPipette]:
                 left_tiprack_list.append(labware_dict[str(i + 1)])
             elif labware in tipbox_dict[args.RightPipette]:
                 right_tiprack_list.append(labware_dict[str(i + 1)])
 
-    return labware_dict, left_tiprack_list, right_tiprack_list
+    return labware_dict, slot_dict, left_tiprack_list, right_tiprack_list
 
 
 def load_tipracks(protocol, tiprack_list, labware_dict):
@@ -187,33 +233,24 @@ def build_labware_dict(protocol, sample_parameters, slot_dict):
     return sample_reagent_labware_dict
 
 
-def calculate_volumes(args, sample_concentration):
+def calculate_volumes(args, sample_concentration, template_in_rxn):
     """
     Calculates volumes for dilution and distribution of sample.
-    Returns a list of tuples consisting of [(uL of sample to dilute, uL of water for dilution),
-     (uL of diluted sample in reaction, uL of water in reaction)]
-    @param args:
-    @param sample_concentration:
-    @return:
+    Returns a list of tuples consisting of
+    (uL of sample to dilute, uL of water for dilution), (uL of diluted sample in reaction, uL of water in reaction)
+
+    :param args:
+    :param sample_concentration:
+    :param template_in_rxn:
+    :return:
+
     """
 
-    template_in_reaction = float(args.DNA_in_Reaction)
-    reagent_volume = float(args.PCR_Volume)*0.5
-
-    if getattr(args, "ReagentVolume", None):
-        reagent_volume = float(getattr(args, "ReagentVolume"))
-
-    max_template_vol = round(float(args.PCR_Volume)-reagent_volume, 1)
-
-    # Get the minimum template concentration per uL allowed.
-    # min_template_concentration = template_in_reaction/max_template_vol
-
-    # If template concentration per uL is less than desired template in reaction then no dilution is necessary.
-    # if sample_concentration <= max_template_concentration:
+    max_template_vol = round(float(args.PCR_Volume)-float(args.ReagentVolume), 1)
 
     # If at least 2 uL of sample is needed then no dilution is necessary
-    if template_in_reaction/sample_concentration >= 2:
-        sample_vol = round(template_in_reaction/sample_concentration, 2)
+    if template_in_rxn/sample_concentration >= 2:
+        sample_vol = round(template_in_rxn/sample_concentration, 2)
         return sample_vol, 0, 0, max_template_vol-sample_vol, max_template_vol
 
     # This will test a series of dilutions up to a 1:200.
@@ -221,11 +258,9 @@ def calculate_volumes(args, sample_concentration):
         dilution = (i+1)*2
         diluted_dna_conc = sample_concentration/dilution
 
-        # if max_template_concentration >= diluted_dna_conc >= min_template_concentration:
-
         # Want to pipette at least 2 uL of diluted sample per well
-        if 2 <= template_in_reaction/diluted_dna_conc <= max_template_vol:
-            diluted_sample_vol = round(template_in_reaction/diluted_dna_conc, 2)
+        if 2 <= template_in_rxn/diluted_dna_conc <= max_template_vol:
+            diluted_sample_vol = round(template_in_rxn/diluted_dna_conc, 2)
             reaction_water_vol = max_template_vol-diluted_sample_vol
 
             return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
@@ -235,7 +270,6 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
                     touch=False, MixVolume=None):
     """
     Generic function to dispense material into designated well.
-    @param speed:
     @param MixVolume:
     @param args:
     @param loop_count:

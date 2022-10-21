@@ -1,2 +1,2 @@
-opentrons>=4.0.0
+opentrons>=6.1.0
 natsort>=7.0.0
