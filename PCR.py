@@ -179,8 +179,8 @@ def run(ctx: protocol_api.ProtocolContext):
 
     water_aspirated = dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated)
-
-    fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
+    if args.Template == " ddPCR":
+        fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
 
     ctx.comment("\nProgram Complete")
 
@@ -362,16 +362,20 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
         sample_vol = sample_data_dict[sample_key][0]
         diluent_vol = sample_data_dict[sample_key][1]
         diluted_sample_vol = sample_data_dict[sample_key][2]
+        mix_volume = None
+        if float(args.PCR_Volume) > 20:
+            mix_volume = 18
 
         # If no dilution is necessary, dispense sample and continue
         if diluted_sample_vol == 0:
             sample_pipette, sample_loop, sample_vol = \
                 Utilities.pipette_selection(left_pipette, right_pipette, sample_vol)
+
             for well in sample_dest_wells:
                 Utilities.dispensing_loop(args, sample_loop, sample_pipette,
                                           sample_source_labware[sample_source_well],
                                           sample_destination_labware[well], sample_vol,
-                                          NewTip=True, MixReaction=True, touch=True)
+                                          NewTip=True, MixReaction=True, touch=True, MixVolume=mix_volume)
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
