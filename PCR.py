@@ -118,6 +118,38 @@ def plate_layout(labware):
     return plate_layout_by_column, layout_data
 
 
+def calculate_volumes(args, sample_concentration, template_in_rxn):
+    """
+    Calculates volumes for dilution and distribution of sample.
+    Returns a list of tuples consisting of
+    (uL of sample to dilute, uL of water for dilution), (uL of diluted sample in reaction, uL of water in reaction)
+
+    :param args:
+    :param sample_concentration:
+    :param template_in_rxn:
+    :return:
+
+    """
+
+    max_template_vol = round(float(args.PCR_Volume)-float(args.ReagentVolume), 1)
+
+    # If at least 2 uL of sample is needed then no dilution is necessary
+    if template_in_rxn/sample_concentration >= 2:
+        sample_vol = round(template_in_rxn/sample_concentration, 2)
+        return sample_vol, 0, 0, max_template_vol-sample_vol, max_template_vol
+
+    # This will test a series of dilutions up to a 1:200.
+    for i in range(50):
+        dilution = (i+1)*2
+        diluted_dna_conc = sample_concentration/dilution
+
+        # Want to pipette at least 2 uL of diluted sample per well
+        if 2 <= template_in_rxn/diluted_dna_conc <= max_template_vol:
+            diluted_sample_vol = round(template_in_rxn/diluted_dna_conc, 2)
+            reaction_water_vol = max_template_vol-diluted_sample_vol
+
+            return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
+
 
 def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
     sample_data_dict = defaultdict(list)
@@ -144,7 +176,7 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
             raise SystemExit("There is an error in the Template name.")
 
         # sample_string = sample_name
-        ucv = Utilities.calculate_volumes(args, sample_concentration, template_in_rxn)
+        ucv = calculate_volumes(args, sample_concentration, template_in_rxn)
         sample_vol = ucv[0]
         diluent_vol = ucv[1]
         diluted_sample_vol = ucv[2]
