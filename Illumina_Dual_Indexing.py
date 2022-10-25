@@ -126,7 +126,7 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
     pcr_reservoir_dia = reagent_labware[args.PCR_ReagentWell.upper()].diameter
     cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
     tip_height = \
-        Utilities.res_tip_height(float(args.ReagentVolume), pcr_reservoir_dia, cone_vol, float(args.BottomOffset))
+        Utilities.res_tip_height(float(args.TotalReagentVolume), pcr_reservoir_dia, cone_vol, float(args.BottomOffset))
     pcr_pipette, pcr_loop, pcr_reagent_vol = Utilities.pipette_selection(left_pipette, right_pipette, pcr_reagent_vol)
     aspirated_vol = 0
 
@@ -143,7 +143,7 @@ def add_pcr_mix(args, labware_dict, sample_dest_dict, left_pipette, right_pipett
 
         aspirated_vol += pcr_reagent_vol
 
-        tip_height = Utilities.res_tip_height(float(args.ReagentVolume)-aspirated_vol, pcr_reservoir_dia, cone_vol,
+        tip_height = Utilities.res_tip_height(float(args.TotalReagentVolume)-aspirated_vol, pcr_reservoir_dia, cone_vol,
                                               float(args.BottomOffset))
 
 
