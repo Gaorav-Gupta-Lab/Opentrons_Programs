@@ -10,7 +10,7 @@ Chapel Hill NC, 27599
 """
 import math
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 
 def labware_cone_volume(args, labware_name):

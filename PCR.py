@@ -21,7 +21,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v1.0.1',
+    'protocolName': 'PCR v1.0.2',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a Generic PCR or a ddPCR',
     'apiLevel': '2.13'
@@ -104,8 +104,9 @@ def plate_layout(labware):
     for k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
         layout_data[k] = ['', '', '', '', '', '', '', '', '', '', '', '', ]
 
-    if labware == "stacked_96_well":
+    if labware == "stacked_96_well" or labware == "8_well_strip_dilution_tubes":
         column_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
     elif labware == "8_well_strip_tubes_200ul":
         column_index = [1, 3, 5, 7, 9, 11, 12]
 
