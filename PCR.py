@@ -131,7 +131,7 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
 
     """
 
-    max_template_vol = round(float(args.PCR_Volume)-float(args.ReagentVolume), 1)
+    max_template_vol = round(float(args.PCR_Volume)-float(args.MasterMixPerRxn), 1)
 
     # If at least 2 uL of sample is needed then no dilution is necessary
     if template_in_rxn/sample_concentration >= 2:
@@ -217,6 +217,7 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
         target_list.append(target)
 
     target_list = list(set(target_list))
+
     for target in target_list:
         control_name = "Water"
         target_name = target_info_dict[int(target)][1]
@@ -293,8 +294,11 @@ def run(ctx: protocol_api.ProtocolContext):
         for well in natsort.natsorted(layout_data):
             well_string = "\t".join(layout_data[well])
             plate_layout_string += "\n{}\t{}\t".format(well, well_string)
+
         plate_layout_file = \
-            open("C:{0}Users{0}{1}{0}Documents{0}ddPCR_PlateLayout.tsv".format(os.sep, os.getlogin()), 'w')
+            open("C:{0}Users{0}{1}{0}Documents{0}{2}_PlateLayout.tsv".
+                 format(os.sep, os.getlogin(), args.Template), 'w')
+
         plate_layout_file.write(plate_layout_string)
         plate_layout_file.close()
 
@@ -339,10 +343,12 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
 
         for i in range(wells_remaining):
             blank_well = "{}{}".format(row_list[i+row_index+1], column)
+
             Utilities.dispensing_loop(args, fill_loop, fill_pipette,
                                       reagent_labware[args.WaterResWell].bottom(water_tip_height),
                                       sample_destination_labware[blank_well], fill_vol,
                                       NewTip=False, MixReaction=False)
+
             water_aspirated = water_aspirated+fill_vol
             water_tip_height = Utilities.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia,
                                                         cone_vol, bottom_offset)
@@ -370,7 +376,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
         reagent_slot = args.ReagentSlot
         reagent_source_well = target_info_dict[int(target)][0]
         reagent_well_vol = float(target_info_dict[int(target)][2])
-        reagent_aspirated = float(args.ReagentVolume)
+        reagent_aspirated = float(args.MasterMixPerRxn)
         reagent_source_labware = labware_dict[reagent_slot]
         target_well_list = target_well_dict[target]
         reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
@@ -478,7 +484,8 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
     else:
         labware_name = slot_dict[args.PCR_PlateSlot]
 
-    dilution_plate_layout = plate_layout(labware_name)
+    dilution_plate_layout, unused_layout = plate_layout(labware_name)
+
     dilution_well_index = 0
 
     for sample_key in sample_parameters:
@@ -526,13 +533,18 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
 
         # Make dilution, diluent first
         dilution_well = dilution_plate_layout[dilution_well_index]
+
         Utilities.dispensing_loop(args, diluent_loop, diluent_pipette,
                                   reagent_labware[args.WaterResWell].bottom(water_tip_height),
                                   dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=False,
                                   touch=True)
-
+        mix_volume = None
+        if diluted_sample_vol < 20:
+            mix_volume = 18
         Utilities.dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                                  dilution_labware[dilution_well], sample_vol, NewTip=True, MixReaction=True)
+                                  dilution_labware[dilution_well], sample_vol, NewTip=True, MixReaction=True,
+                                  MixVolume=mix_volume)
+
         water_aspirated += diluent_vol
         dilution_well_index += 1
         water_tip_height = \
@@ -543,11 +555,13 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
         for well in sample_dest_wells:
             sample_pipette, sample_loop, diluted_sample_vol = \
                 Utilities.pipette_selection(left_pipette, right_pipette, diluted_sample_vol)
-
+            mix_volume = None
+            if diluted_sample_vol < 20:
+                mix_volume = 18
             Utilities.dispensing_loop(args, sample_loop, sample_pipette,
                                       dilution_labware[dilution_well].bottom(bottom_offset),
                                       sample_destination_labware[well], diluted_sample_vol, NewTip=True,
-                                      MixReaction=True)
+                                      MixReaction=True, MixVolume=mix_volume)
 
         if sample_pipette.has_tip:
             sample_pipette.drop_tip()

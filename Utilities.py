@@ -128,7 +128,7 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
 
     """
 
-    max_template_vol = round(float(args.PCR_Volume)-float(args.ReagentVolume), 1)
+    max_template_vol = round(float(args.PCR_Volume)-float(args.MasterMixPerRxn), 1)
 
     # If at least 2 uL of sample is needed then no dilution is necessary
     if template_in_rxn/sample_concentration >= 2:
