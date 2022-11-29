@@ -21,9 +21,9 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'Illumina Dual Indexing v1.0.2',
+    'protocolName': 'Illumina Dual Indexing v1.1.0',
     'author': 'Dennis Simpson',
-    'description': 'Add Illumina dual indexing to library',
+    'description': 'Add Illumina dual indexing to NGS library',
     'apiLevel': '2.13'
 }
 
@@ -235,7 +235,9 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
                                   MixReaction=False, touch=True)
 
         # Determine primer volumes and dispense them.
-        primer_volume = (float(args.PCR_Volume)/50) * 1.25
+        # 6.25 uM = 2 uL per 50
+        # primer_volume = (float(args.PCR_Volume)/50) * 1.25
+        primer_volume = (float(args.PCR_Volume)/50) * 2.0
         primer_pipette, primer_loop, primer_volume = \
             Utilities.pipette_selection(left_pipette, right_pipette, primer_volume)
 
