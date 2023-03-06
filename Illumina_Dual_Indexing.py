@@ -235,7 +235,8 @@ def dispense_samples(args, sample_parameters, labware_dict, left_pipette, right_
                                   MixReaction=False, touch=True)
 
         # Determine primer volumes and dispense them.
-        # 6.25 uM = 2 uL per 50
+        # 6.25 uM = 2 uL per 50 uL
+        # 10 uM = 1.25 uL per 50 uL
         # primer_volume = (float(args.PCR_Volume)/50) * 1.25
         primer_volume = (float(args.PCR_Volume)/50) * 2.0
         primer_pipette, primer_loop, primer_volume = \

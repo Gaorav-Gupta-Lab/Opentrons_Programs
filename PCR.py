@@ -21,7 +21,7 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v1.0.2',
+    'protocolName': 'PCR v1.0.3',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a Generic PCR or a ddPCR',
     'apiLevel': '2.13'
