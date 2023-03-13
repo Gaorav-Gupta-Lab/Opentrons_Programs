@@ -5,6 +5,7 @@ import csv
 import platform
 from types import SimpleNamespace
 from contextlib import suppress
+import opentrons
 from collections import defaultdict
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
@@ -282,28 +283,32 @@ def run(ctx: protocol_api.ProtocolContext):
 
     # This will output a plate layout file.  Only does it during the simulation from our GUI
     if ctx.is_simulating() and platform.system() == "Windows":
-        run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
-        plate_layout_string = \
-            "## {} Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
-            "# Format:\tTemplate | Target | Template Dilution | Template Volume in Reaction\n\n\t"\
-            .format(args.Template, run_date, args.User)
+        try:
+            run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+            plate_layout_string = \
+                "## {} Setup\n## Setup Date:\t{}\n## Template User:\t{}\n" \
+                "# Format:\tTemplate | Target | Template Dilution | Template Volume in Reaction\n\n\t"\
+                .format(args.Template, run_date, args.User)
 
-        for i in range(12):
-            plate_layout_string += "{}\t".format(i+1)
+            for i in range(12):
+                plate_layout_string += "{}\t".format(i+1)
 
-        # I have to import this here because I have been unable to get natsort on the robot.
-        import natsort
+            # I have to import this here because I have been unable to get natsort on the robot.
+            import natsort
 
-        for well in natsort.natsorted(layout_data):
-            well_string = "\t".join(layout_data[well])
-            plate_layout_string += "\n{}\t{}\t".format(well, well_string)
+            for well in natsort.natsorted(layout_data):
+                 well_string = "\t".join(layout_data[well])
+                 plate_layout_string += "\n{}\t{}\t".format(well, well_string)
 
-        plate_layout_file = \
-            open("C:{0}Users{0}{1}{0}Documents{0}{2}_PlateLayout.tsv".
-                 format(os.sep, os.getlogin(), args.Template), 'w')
+            plate_layout_file = \
+                open("C:{0}Users{0}{1}{0}Documents{0}{2}_PlateLayout.tsv".
+                     format(os.sep, os.getlogin(), args.Template), 'w')
 
-        plate_layout_file.write(plate_layout_string)
-        plate_layout_file.close()
+            plate_layout_file.write(plate_layout_string)
+            plate_layout_file.close()
+
+        except ModuleNotFoundError:
+            pass
 
     # Now do the actual dispensing.
     water_aspirated = dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipette)
