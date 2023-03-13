@@ -106,7 +106,7 @@ def plate_layout(labware):
         layout_data[k] = ['', '', '', '', '', '', '', '', '', '', '', '', ]
 
     if labware == "stacked_96_well" or labware == "bigwell_96_tuberack_200ul_dilution_tube" \
-            or labware == "biorad_ddpcr_96_wellplate_100ul":
+            or labware == "biorad_ddpcr_96_wellplate_100ul" or labware == "biorad_hardshell_96_wellplate_150ul":
 
         column_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
