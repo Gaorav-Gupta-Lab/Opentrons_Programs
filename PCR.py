@@ -5,15 +5,17 @@ import csv
 import platform
 from types import SimpleNamespace
 from contextlib import suppress
-import opentrons
+# import opentrons
 from collections import defaultdict
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 # Check if we are on the OT-2, Robotron, or some other computer.
 template_parser_path = "{0}var{0}lib{0}jupyter{0}notebooks".format(os.sep)
 if not os.path.exists(template_parser_path):
+    # This is Robotron, the OT-2 controller computer.
     template_parser_path = "C:{0}Opentrons_Programs".format(os.sep)
-    # this is the development computer
+
+    # This is the development computer
     if not os.path.exists(template_parser_path):
         template_parser_path = \
             "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
@@ -22,11 +24,15 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v1.0.3',
+    'protocolName': 'PCR v1.1.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a Generic PCR or a ddPCR',
-    'apiLevel': '2.13'
+    'apiLevel': '2.13',
+    'robotType': 'OT-2'
 }
+
+# requirements
+# requirements = {"robotType": "OT-2", "apiLevel": "2.13"}
 
 
 def parse_sample_template(input_file):
@@ -96,28 +102,40 @@ def labware_parsing(args, ctx):
 
 def plate_layout(labware):
     """
-    Define the destination layout for the reactions.  Can be 96-well plate or 8-well strip tubes
+    Define the destination layout for the reactions.  Can be 384-well, 96-well plate or 8-well strip tubes
     @param labware:
     @return:
     """
+    column_count = 0
+    row_count = 0
+    if "384_" in labware:
+        column_count = 32
+        row_count = 12
+    elif "96_" or "8_well" in labware:
+        column_count = 12
+        row_count = 8
 
     layout_data = defaultdict(list)
-    for k in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']:
-        layout_data[k] = ['', '', '', '', '', '', '', '', '', '', '', '', ]
-
-    if labware == "stacked_96_well" or labware == "bigwell_96_tuberack_200ul_dilution_tube" \
-            or labware == "biorad_ddpcr_96_wellplate_100ul" or labware == "biorad_hardshell_96_wellplate_150ul":
-
-        column_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-
-    elif labware == "8_well_strip_tubes_200ul":
-        column_index = [1, 3, 5, 7, 9, 11, 12]
-
-    rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
     plate_layout_by_column = []
-    for i in column_index:
-        for row in rows:
-            plate_layout_by_column.append("{}{}".format(row, i))
+
+    # This is the index when using strip tubes.
+    column_index = [1, 3, 5, 7, 9, 11, 12]
+    row_labels = \
+        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+         "U", "V", "W", "X", "Y", "Z"]
+
+    for c in range(column_count):
+
+        if "8_well" in labware:
+            # Strip tubes are in every other column.
+            c = column_index[c]
+        else:
+            # Humans don't do well with 0-based labels.
+            c += 1
+
+        for r in range(row_count):
+            layout_data[row_labels[r]] = [''] * column_count
+            plate_layout_by_column.append("{}{}".format(row_labels[r], c))
 
     return plate_layout_by_column, layout_data
 
@@ -297,8 +315,8 @@ def run(ctx: protocol_api.ProtocolContext):
             import natsort
 
             for well in natsort.natsorted(layout_data):
-                 well_string = "\t".join(layout_data[well])
-                 plate_layout_string += "\n{}\t{}\t".format(well, well_string)
+                well_string = "\t".join(layout_data[well])
+                plate_layout_string += "\n{}\t{}\t".format(well, well_string)
 
             plate_layout_file = \
                 open("C:{0}Users{0}{1}{0}Documents{0}{2}_PlateLayout.tsv".
@@ -383,15 +401,34 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
     for target in target_well_dict:
         reagent_slot = args.ReagentSlot
         reagent_source_well = target_info_dict[int(target)][0]
-        reagent_well_vol = float(target_info_dict[int(target)][2])
-        reagent_aspirated = float(args.MasterMixPerRxn)
         reagent_source_labware = labware_dict[reagent_slot]
         target_well_list = target_well_dict[target]
+        '''
+        reagent_aspirated = float(args.MasterMixPerRxn)
+        reagent_well_vol = float(target_info_dict[int(target)][2])
         reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
         reagent_cone_vol = Utilities.labware_cone_volume(args, reagent_source_labware)
         reagent_pipette, reagent_loop, reagent_volume = \
             Utilities.pipette_selection(left_pipette, right_pipette, reagent_aspirated)
+        '''
+        # Use distribute command to dispense master mix.
+        destination_wells = []
+        for well in target_well_list:
+            destination_wells.append(sample_destination_labware[well])
 
+        Utilities.distribute_reagents(right_pipette,
+                                      reagent_source_labware[reagent_source_well].bottom(z=bottom_offset),
+                                      destination_wells,
+                                      float(args.MasterMixPerRxn)
+                                      )
+
+        # Drop any tips the pipettes might have.
+        if left_pipette.has_tip:
+            left_pipette.drop_tip()
+        if right_pipette.has_tip:
+            right_pipette.drop_tip()
+
+        '''
         for well in target_well_list:
             reagent_tip_height = Utilities.res_tip_height(reagent_well_vol-reagent_aspirated, reagent_well_dia,
                                                           reagent_cone_vol, bottom_offset)
@@ -408,7 +445,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
             left_pipette.drop_tip()
         if right_pipette.has_tip:
             right_pipette.drop_tip()
-
+        '''
     return
 
 
@@ -425,12 +462,38 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
     @return:
     """
     reagent_labware = labware_dict[args.ReagentSlot]
+    sample_destination_labware = labware_dict[args.PCR_PlateSlot]
+    '''
     bottom_offset = float(args.BottomOffset)
     cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
     water_res_well_dia = reagent_labware[args.WaterResWell].diameter
     water_tip_height = Utilities.res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol, bottom_offset)
-    sample_destination_labware = labware_dict[args.PCR_PlateSlot]
     water_aspirated = 0
+    '''
+
+    destination_wells = []
+    dispense_vol = []
+    water_aspirated = 0
+    for well in water_well_dict:
+        destination_wells.append(sample_destination_labware[well])
+        dispense_vol.append(float(water_well_dict[well]))
+        water_aspirated += water_well_dict[well]
+
+    # Define the pipette for dispensing the water.
+    water_pipette, water_loop, water_volume = Utilities.pipette_selection(left_pipette, right_pipette, water_aspirated)
+
+    # Use distribute command to dispense water.
+    Utilities.distribute_reagents(water_pipette,
+                                  reagent_labware[args.WaterResWell].bottom(z=float(args.BottomOffset)),
+                                  destination_wells,
+                                  dispense_vol
+                                  )
+    if left_pipette.has_tip:
+        left_pipette.drop_tip()
+    if right_pipette.has_tip:
+        right_pipette.drop_tip()
+
+    return water_aspirated
 
     for well in water_well_dict:
         water_volume = water_well_dict[well]
@@ -522,15 +585,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
         # Adjust volume of diluted sample to make sure there is enough
         diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), 2)
         diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), 2)
-        '''
-        diluted_template_on_hand = sample_vol+diluent_vol
-        diluted_template_factor = 1.0
-        if diluted_template_needed <= diluted_template_on_hand:
-            diluted_template_factor = diluted_template_needed/diluted_template_on_hand
-            if diluted_template_factor <= 1.5 and (sample_vol * diluted_template_factor) < 10:
-                diluted_template_factor = 2.0
-        '''
-        adjusted_sample_vol = round((sample_vol * diluted_template_factor),1)
+        adjusted_sample_vol = round((sample_vol * diluted_template_factor), 1)
         diluent_vol = round((diluent_vol*diluted_template_factor), 1)
 
         # Reset the pipettes for the new volumes

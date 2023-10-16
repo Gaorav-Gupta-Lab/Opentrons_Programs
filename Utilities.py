@@ -5,12 +5,12 @@ Dennis Simpson
 University of North Carolina at Chapel Hill
 Chapel Hill NC, 27599
 
-@copyright 2022
+@copyright 2023
 
 """
 import math
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
 
 def labware_cone_volume(args, labware_name):
@@ -146,6 +146,33 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
             reaction_water_vol = max_template_vol-diluted_sample_vol
 
             return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
+
+
+def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
+    """
+    Dispense reagents using the distribute function.
+    @param pipette:
+    @param source_well:
+    @param destination_wells:
+    @param dispense_vol:
+    """
+    # ToDo:  Once api 2.15 is out, simplify this.
+    p20_default_rate = 7.56
+    p300_default_rate = 92.86
+
+    if "P300 Single-Channel GEN2" in str(pipette):
+        default_rate = p300_default_rate
+    elif "P20 Single-Channel GEN2" in str(pipette):
+        default_rate = p20_default_rate
+
+    pipette.flow_rate.aspirate = 30
+    pipette.flow_rate.dispense = 10
+
+    pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells,
+                       touch_tip=True, blow_out=True, disposal_volume=10, blowout_location='source well')
+
+    pipette.flow_rate.aspirate = default_rate
+    pipette.flow_rate.dispense = default_rate
 
 
 def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
