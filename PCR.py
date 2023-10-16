@@ -416,11 +416,11 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
         for well in target_well_list:
             destination_wells.append(sample_destination_labware[well])
 
-        Utilities.distribute_reagents(right_pipette,
-                                      reagent_source_labware[reagent_source_well].bottom(z=bottom_offset),
-                                      destination_wells,
-                                      float(args.MasterMixPerRxn)
-                                      )
+        distribute_reagents(right_pipette,
+                            reagent_source_labware[reagent_source_well].bottom(z=bottom_offset),
+                            destination_wells,
+                            float(args.MasterMixPerRxn)
+                            )
 
         # Drop any tips the pipettes might have.
         if left_pipette.has_tip:
@@ -483,11 +483,12 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
     water_pipette, water_loop, water_volume = Utilities.pipette_selection(left_pipette, right_pipette, water_aspirated)
 
     # Use distribute command to dispense water.
-    Utilities.distribute_reagents(water_pipette,
-                                  reagent_labware[args.WaterResWell].bottom(z=float(args.BottomOffset)),
-                                  destination_wells,
-                                  dispense_vol
-                                  )
+    distribute_reagents(water_pipette,
+                        reagent_labware[args.WaterResWell].bottom(z=float(args.BottomOffset)),
+                        destination_wells,
+                        dispense_vol
+                        )
+    
     if left_pipette.has_tip:
         left_pipette.drop_tip()
     if right_pipette.has_tip:
@@ -630,6 +631,33 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
             sample_pipette.drop_tip()
 
     return water_aspirated
+
+
+def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
+    """
+    Dispense reagents using the distribute function.
+    @param pipette:
+    @param source_well:
+    @param destination_wells:
+    @param dispense_vol:
+    """
+    # ToDo:  Once api 2.15 is out, simplify this.
+    p20_default_rate = 7.56
+    p300_default_rate = 92.86
+
+    if "P300 Single-Channel GEN2" in str(pipette):
+        default_rate = p300_default_rate
+    elif "P20 Single-Channel GEN2" in str(pipette):
+        default_rate = p20_default_rate
+
+    pipette.flow_rate.aspirate = 30
+    pipette.flow_rate.dispense = 10
+
+    pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells,
+                       touch_tip=True, blow_out=True, disposal_volume=10, blowout_location='source well')
+
+    pipette.flow_rate.aspirate = default_rate
+    pipette.flow_rate.dispense = default_rate
 
 
 if __name__ == "__main__":
