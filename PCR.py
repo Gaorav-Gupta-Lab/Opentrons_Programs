@@ -5,7 +5,6 @@ import csv
 import platform
 from types import SimpleNamespace
 from contextlib import suppress
-# import opentrons
 from collections import defaultdict
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
@@ -24,15 +23,13 @@ import Utilities
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v1.1.0',
+    'protocolName': 'PCR v2.0.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
-    'description': 'Setup a Generic PCR or a ddPCR',
-    'apiLevel': '2.13',
-    'robotType': 'OT-2'
-}
+    'description': 'Setup a Generic PCR or a ddPCR'
+    }
 
 # requirements
-# requirements = {"robotType": "OT-2", "apiLevel": "2.13"}
+requirements = {"robotType": "OT-2", "apiLevel": "2.19"}
 
 
 def parse_sample_template(input_file):
@@ -87,7 +84,8 @@ def labware_parsing(args, ctx):
     # Pipette Tip Boxes
     left_tiprack_list = []
     right_tiprack_list = []
-    for i in range(len(slot_list)):
+    # for i in range(len(slot_list)):
+    for i in range(11):
         labware = getattr(args, "{}".format(slot_list[i]))
         if labware:
             slot_dict[str(i + 1)] = labware
@@ -190,10 +188,10 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
         sample_targets = sample_parameters[sample_key][4].split(",")
         replicates = int(sample_parameters[sample_key][5])
 
-        if args.Template == " Generic PCR" or args.Template == "Generic PCR":
-            template_in_rxn = float(sample_parameters[sample_key][6])
-        elif args.Template == " ddPCR" or args.Template == "ddPCR":
+        if "ddPCR" in args.Template:
             template_in_rxn = float(args.DNA_in_Reaction)
+        elif "Generic PCR" in args.Template:
+            template_in_rxn = float(sample_parameters[sample_key][6])
         else:
             raise SystemExit("There is an error in the Template name.")
 
@@ -335,7 +333,7 @@ def run(ctx: protocol_api.ProtocolContext):
 
     water_aspirated = dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated)
-    if args.Template == " ddPCR":
+    if "ddPCR" in args.Template:
         fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
 
     ctx.comment("\nProgram Complete")
@@ -360,7 +358,8 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
         sample_destination_labware = labware_dict[args.PCR_PlateSlot]
         reagent_labware = labware_dict[args.ReagentSlot]
         water_res_well_dia = reagent_labware[args.WaterResWell].diameter
-        cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+        # cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+        cone_vol = Utilities.labware_cone_volume(args, args.ReagentSlot)
         fill_pipette, fill_loop, fill_vol = \
             Utilities.pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume))
         water_tip_height = \
@@ -496,6 +495,8 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
 
     return water_aspirated
 
+    """
+    # This block is only required for stand alone simulations.  Our GUI does not need it.
     for well in water_well_dict:
         water_volume = water_well_dict[well]
 
@@ -523,6 +524,7 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
 
     return water_aspirated
 
+    """
 
 def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_parameters, left_pipette, right_pipette,
                      water_aspirated):
@@ -546,7 +548,8 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
     sample_destination_labware = labware_dict[args.PCR_PlateSlot]
     reagent_labware = labware_dict[args.ReagentSlot]
     water_res_well_dia = reagent_labware[args.WaterResWell].diameter
-    cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+    # cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
+    cone_vol = Utilities.labware_cone_volume(args, args.ReagentSlot)
     water_tip_height = Utilities.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
                                                 bottom_offset)
     # If the user determines no dilutions are required they can leave that slot blank.  I don't like this approach,
@@ -654,7 +657,7 @@ def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
     pipette.flow_rate.dispense = 10
 
     pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells,
-                       touch_tip=True, blow_out=True, disposal_volume=10, blowout_location='source well')
+                       touch_tip=True, radius=0.75, v_offset=-8, blow_out=True, disposal_volume=10, blowout_location='source well')
 
     pipette.flow_rate.aspirate = default_rate
     pipette.flow_rate.dispense = default_rate

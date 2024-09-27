@@ -10,23 +10,27 @@ Chapel Hill NC, 27599
 """
 import math
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
+
+import Tool_Box
 
 
-def labware_cone_volume(args, labware_name):
+def labware_cone_volume(args, labware_slot):
     """
     Based on the labware and reservoir return the volume at which the cylinder shape transitions to the conical shape.
     @param args:
-    @param labware_name:
+    @param labware_slot:
     @return:
     """
     cone_vol = 200
-    labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
+
+    # labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
+    labware = getattr(args, "Slot{}".format(str(labware_slot)))
 
     if "e5ml_" in labware:
         cone_vol = 1200
 
-    elif"1.5ml_24" in labware:
+    elif "e1.5ml_" in labware:
         cone_vol = 450
 
     return cone_vol
@@ -34,7 +38,7 @@ def labware_cone_volume(args, labware_name):
 
 def res_tip_height(res_vol, well_dia, cone_vol, bottom_offset):
     """
-    Calculate the the height of the liquid in a reservoir and return the value to set the pipette tip height.
+    Calculate the height of the liquid in a reservoir and return the value to set the pipette tip height.
     This works for both conical shapes and cylinders.
     @param bottom_offset:
     @param res_vol:
