@@ -9,7 +9,7 @@ from collections import defaultdict
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 import math
-import Tool_Box
+# import Tool_Box
 
 # Check if we are on the OT-2, Robotron, or some other computer.
 template_parser_path = "{0}var{0}lib{0}jupyter{0}notebooks".format(os.sep)
