@@ -650,7 +650,7 @@ def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
     @param dispense_vol:
     """
 
-    # ToDo: This needs work.  
+    # ToDo: This needs work.
     p20_default_rate = 7.50
     p300_default_rate = 75.0
    #  p300_default_rate = 92.86
