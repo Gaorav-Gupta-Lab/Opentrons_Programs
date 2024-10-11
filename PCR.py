@@ -86,9 +86,9 @@ def labware_parsing(args, ctx):
     # Pipette Tip Boxes
     left_tiprack_list = []
     right_tiprack_list = []
-    # for i in range(len(slot_list)):
     for i in range(11):
         labware = getattr(args, "{}".format(slot_list[i]))
+
         if labware:
             slot_dict[str(i + 1)] = labware
             labware_dict[str(i + 1)] = ctx.load_labware(labware, str(i + 1))
@@ -153,11 +153,11 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
 
     """
 
-    max_template_vol = round(float(args.PCR_Volume)-float(args.MasterMixPerRxn), 1)
+    max_template_vol = round(float(args.PCR_Volume)-float(args.MasterMixPerRxn), ndigits=1)
 
     # If at least 2 uL of sample is needed then no dilution is necessary
     if template_in_rxn/sample_concentration >= 2:
-        sample_vol = round(template_in_rxn/sample_concentration, 2)
+        sample_vol = round(template_in_rxn/sample_concentration, ndigits=1)
         return sample_vol, 0, 0, max_template_vol-sample_vol, max_template_vol
 
     # This will test a series of dilutions up to a 1:200.
@@ -167,7 +167,7 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
 
         # Want to pipette at least 2 uL of diluted sample per well
         if 2 <= template_in_rxn/diluted_dna_conc <= max_template_vol:
-            diluted_sample_vol = round(template_in_rxn/diluted_dna_conc, 2)
+            diluted_sample_vol = round(template_in_rxn/diluted_dna_conc, ndigits=1)
             reaction_water_vol = max_template_vol-diluted_sample_vol
 
             return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
@@ -232,7 +232,7 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
                 dest_well_count += 1
                 
         sample_data_dict[sample_key] = \
-            [round(sample_vol, 1), round(diluent_vol, 1), round(diluted_sample_vol, 1), sample_wells]
+            [round(sample_vol, ndigits=1), round(diluent_vol, ndigits=1), round(diluted_sample_vol, ndigits=1), sample_wells]
 
     # Define our no template control wells for the targets.
     for target in target_well_dict:
@@ -482,6 +482,7 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
 
     # Define the pipette for dispensing the water.
     water_pipette, water_loop, water_volume = Utilities.pipette_selection(left_pipette, right_pipette, water_aspirated)
+    print("There be DRAGONS")
 
     # Use distribute command to dispense water.
     distribute_reagents(water_pipette,
@@ -591,10 +592,10 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
-        diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), 2)
-        diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), 2)
-        adjusted_sample_vol = round((sample_vol * diluted_template_factor), 1)
-        diluent_vol = round((diluent_vol*diluted_template_factor), 1)
+        diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), ndigits=1)
+        diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), ndigits=1)
+        adjusted_sample_vol = round((sample_vol * diluted_template_factor), ndigits=1)
+        diluent_vol = round((diluent_vol*diluted_template_factor), ndigits=1)
 
         # Reset the pipettes for the new volumes
         diluent_pipette, diluent_loop, diluent_vol = \
@@ -648,17 +649,22 @@ def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
     @param destination_wells:
     @param dispense_vol:
     """
-    # ToDo:  Once api 2.15 is out, simplify this.
-    p20_default_rate = 7.56
-    p300_default_rate = 92.86
+
+    # ToDo: This needs work.  
+    p20_default_rate = 7.50
+    p300_default_rate = 75.0
+   #  p300_default_rate = 92.86
 
     if "P300 Single-Channel GEN2" in str(pipette):
         default_rate = p300_default_rate
+        pipette.flow_rate.aspirate = 30
+        pipette.flow_rate.dispense = 10
+        pipette.flow_rate.blow_out = 50
     elif "P20 Single-Channel GEN2" in str(pipette):
         default_rate = p20_default_rate
-
-    pipette.flow_rate.aspirate = 30
-    pipette.flow_rate.dispense = 10
+        pipette.flow_rate.aspirate = 7.0
+        pipette.flow_rate.dispense = 5.0
+        pipette.flow_rate.blow_out = 7.0
 
     pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells,
                        touch_tip=True, radius=0.75, v_offset=-4, speed=40, blow_out=True, disposal_volume=10,
@@ -666,6 +672,7 @@ def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
 
     pipette.flow_rate.aspirate = default_rate
     pipette.flow_rate.dispense = default_rate
+    pipette.flow_rate.blow_out = default_rate
 
 class Utilities:
 
@@ -708,7 +715,7 @@ class Utilities:
         if height < 3:
             height = bottom_offset
 
-        return round(height, 1)
+        return round(height, ndigits=1)
 
     def load_tipracks(protocol, tiprack_list, labware_dict):
         """
@@ -732,26 +739,21 @@ class Utilities:
         @param volume:
         @return:
         """
+        # ToDo: This will not run on a FLEX and is error prone.  Need to allow more pipettes
         loop = 1
         pipette = ""
-        if volume > 20 and "P300 Single-Channel GEN2" in str(right_pipette):
-            pipette = right_pipette
-        elif volume <= 20 and "P20 Single-Channel GEN2" in str(left_pipette):
-            pipette = left_pipette
-        elif volume < 10 and "P10 Single-Channel GEN1" in str(left_pipette):
-            pipette = left_pipette
-        elif volume < 10 and "P10 Single-Channel GEN1" in str(right_pipette):
-            pipette = right_pipette
-        elif 10 <= volume <= 20 and "P10 Single-Channel GEN1" in str(left_pipette):
-            pipette = left_pipette
-            volume = volume * 0.5
-            loop = 2
-        elif 10 <= volume <= 20 and "P10 Single-Channel GEN1" in str(right_pipette):
-            pipette = right_pipette
-            volume = volume * 0.5
-            loop = 2
+        if volume > 20:
+            if "P300 Single-Channel GEN2" in str(right_pipette):
+                pipette = right_pipette
+            else:
+                pipette = left_pipette
+        elif volume <= 20:
+            if "P20 Single-Channel GEN2" in str(left_pipette):
+                pipette = left_pipette
+            else:
+                pipette = right_pipette
 
-        return pipette, loop, round(volume, 1)
+        return pipette, loop, round(volume, ndigits=1)
 
     def build_labware_dict(protocol, sample_parameters, slot_dict):
         sample_reagent_labware_dict = {}
@@ -781,11 +783,11 @@ class Utilities:
 
         """
 
-        max_template_vol = round(float(args.PCR_Volume) - float(args.MasterMixPerRxn), 1)
+        max_template_vol = round(float(args.PCR_Volume) - float(args.MasterMixPerRxn), ndigits=1)
 
         # If at least 2 uL of sample is needed then no dilution is necessary
         if template_in_rxn / sample_concentration >= 2:
-            sample_vol = round(template_in_rxn / sample_concentration, 2)
+            sample_vol = round(template_in_rxn / sample_concentration, ndigits=1)
             return sample_vol, 0, 0, max_template_vol - sample_vol, max_template_vol
 
         # This will test a series of dilutions up to a 1:200.
@@ -795,7 +797,7 @@ class Utilities:
 
             # Want to pipette at least 2 uL of diluted sample per well
             if 2 <= template_in_rxn / diluted_dna_conc <= max_template_vol:
-                diluted_sample_vol = round(template_in_rxn / diluted_dna_conc, 2)
+                diluted_sample_vol = round(template_in_rxn / diluted_dna_conc, ndigits=1)
                 reaction_water_vol = max_template_vol - diluted_sample_vol
 
                 return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
@@ -872,7 +874,8 @@ class Utilities:
             v = float(args.PCR_Volume)
             if MixVolume:
                 v = MixVolume
-            pipette.mix(repetitions=4, volume=v * 0.65, rate=2.0)
+            vol = round(v*0.65, ndigits=1)
+            pipette.mix(repetitions=4, volume=vol, rate=2.0)
             pipette.blow_out()
             tip_touch()
 
@@ -897,7 +900,7 @@ if __name__ == "__main__":
         outstring += "{}\t{}\n".format(i, l)
         i += 1
     if platform.system() == "Windows":
-        outfile = open("C:{0}Users{0}{1}{0}Documents{0}Simulation.txt"
+        outfile = open("C:{0}Users{0}{1}{0}Documents{0}ProgramFileSimulation.txt"
                        .format(os.sep, os.getlogin()), 'w', encoding="UTF-16")
         outfile.write(outstring)
         outfile.close()
