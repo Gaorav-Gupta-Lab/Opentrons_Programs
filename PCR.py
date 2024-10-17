@@ -25,14 +25,70 @@ sys.path.insert(0, template_parser_path)
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v2.0.0',
+    'protocolName': 'PCR v2.1.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a Generic PCR or a ddPCR'
     }
 
 # requirements
-requirements = {"robotType": "OT-2", "apiLevel": "2.19"}
+requirements = {"robotType": "OT-2", "apiLevel": "2.20"}
 
+def add_parameters(parameters: protocol_api.Parameters):
+    # TSV file location on OT-2
+    tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
+
+    # If not on the OT-2, get temp TSV file location on Windows Computers for simulation
+    if not os.path.isfile(tsv_file_path):
+        tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
+
+    sample_parameters, args = parse_sample_template(tsv_file_path)
+
+    # run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
+    # run_date = datetime.datetime.today().strftime("%d-%b-%Y")
+    run_date = datetime.datetime.today().strftime("%f")
+    run_type = args.Template.split(" ")[1]
+
+    # This is used by the Opentrons app to make each run unique.
+    parameters.add_str(
+        variable_name="run_label",
+        display_name="Run Label",
+        choices=[
+            {"display_name": "Run Label", "value": "Begin {} for {} {}".format(run_type, args.User, run_date)},],
+        default="Begin {} for {} {}".format(run_type, args.User, run_date),
+    )
+
+    parameters.add_str(
+        variable_name="left_pipette",
+        display_name="Left Pipette".format(run_type, args.User, run_date),
+        choices=[
+            {"display_name": "P20 Single Gen2", "value": "p20_single_gen2"},
+            {"display_name": "P300 Single Gen2", "value": "p300_single_gen2"},],
+        default="p300_single_gen2",
+    )
+
+    parameters.add_str(
+        variable_name="right_pipette",
+        display_name="Right Pipette".format(run_type, args.User, run_date),
+        choices=[
+            {"display_name": "P20 Single Gen2", "value": "p20_single_gen2"},
+            {"display_name": "P300 Single Gen2", "value": "p300_single_gen2"},],
+        default="p20_single_gen2",
+    )
+
+    """
+        parameters.add_bool(
+        variable_name="{}1".format(run_type),
+        display_name="{} {} {}".format(run_type, args.User, run_date),
+        description="Loading run information.",
+        default=True
+    )
+    
+    parameters.add_csv_file(
+        variable_name="dragons_run",
+        display_name="Dragon Hunting",
+        description="Looking to initialize Opentrons csv commands."
+    )
+    """
 
 def parse_sample_template(input_file):
     """
@@ -74,7 +130,7 @@ def parse_sample_template(input_file):
     return sample_dictionary, SimpleNamespace(**options_dictionary)
 
 
-def labware_parsing(args, ctx):
+def labware_parsing(args, protocol):
     # Extract Slot information
     slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
     labware_dict = {}
@@ -91,10 +147,11 @@ def labware_parsing(args, ctx):
 
         if labware:
             slot_dict[str(i + 1)] = labware
-            labware_dict[str(i + 1)] = ctx.load_labware(labware, str(i + 1))
-            if labware in tipbox_dict[args.LeftPipette]:
+            labware_dict[str(i + 1)] = protocol.load_labware(labware, str(i + 1))
+            # if labware in tipbox_dict[args.LeftPipette]:
+            if labware in tipbox_dict[protocol.params.left_pipette]:
                 left_tiprack_list.append(labware_dict[str(i + 1)])
-            elif labware in tipbox_dict[args.RightPipette]:
+            elif labware in tipbox_dict[protocol.params.right_pipette]:
                 right_tiprack_list.append(labware_dict[str(i + 1)])
 
     return labware_dict, slot_dict, left_tiprack_list, right_tiprack_list
@@ -256,7 +313,7 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
     return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
 
 
-def run(ctx: protocol_api.ProtocolContext):
+def run(protocol: protocol_api.ProtocolContext):
 
     # TSV file location on OT-2
     tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
@@ -266,20 +323,18 @@ def run(ctx: protocol_api.ProtocolContext):
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
     sample_parameters, args = parse_sample_template(tsv_file_path)
-
-    ctx.comment("Begin {} {}".format(args.Template, args.Version))
+    protocol.comment(protocol.params.run_label)
 
     # Turn on rail lights and pause program so user can load robot deck.
-    # ctx.set_rail_lights(True)
-    # ctx.pause("Load Labware onto robot deck and click resume when ready to continue")
-    # ctx.home()
-    ctx.set_rail_lights(False)
-
-    labware_dict, slot_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, ctx)
+    # protocol.set_rail_lights(True)
+    # protocol.pause("Load Labware onto robot deck and click resume when ready to continue")
+    # protocol.home()
+    protocol.set_rail_lights(False)
+    labware_dict, slot_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, protocol)
 
     # Pipettes
-    left_pipette = ctx.load_instrument(args.LeftPipette, 'left', tip_racks=left_tiprack_list)
-    right_pipette = ctx.load_instrument(args.RightPipette, 'right', tip_racks=right_tiprack_list)
+    left_pipette = protocol.load_instrument(protocol.params.left_pipette, 'left', tip_racks=left_tiprack_list)
+    right_pipette = protocol.load_instrument(protocol.params.right_pipette, 'right', tip_racks=right_tiprack_list)
 
     # Set the location of the first tip in box.
     with suppress(IndexError):
@@ -300,7 +355,7 @@ def run(ctx: protocol_api.ProtocolContext):
         sample_processing(args, sample_parameters, target_info_dict, slot_dict)
 
     # This will output a plate layout file.  Only does it during the simulation from our GUI
-    if ctx.is_simulating() and platform.system() == "Windows":
+    if protocol.is_simulating() and platform.system() == "Windows":
         try:
             run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
             plate_layout_string = \
@@ -338,9 +393,9 @@ def run(ctx: protocol_api.ProtocolContext):
     if "ddPCR" in args.Template:
         fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
 
-    ctx.comment("\nProgram Complete")
+    protocol.comment("\nProgram Complete")
 
-    if not ctx.is_simulating():
+    if not protocol.is_simulating():
         os.remove(tsv_file_path)
 
 
@@ -482,7 +537,6 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
 
     # Define the pipette for dispensing the water.
     water_pipette, water_loop, water_volume = Utilities.pipette_selection(left_pipette, right_pipette, water_aspirated)
-    print("There be DRAGONS")
 
     # Use distribute command to dispense water.
     distribute_reagents(water_pipette,
