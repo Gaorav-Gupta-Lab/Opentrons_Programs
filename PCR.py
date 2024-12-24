@@ -25,7 +25,7 @@ sys.path.insert(0, template_parser_path)
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v2.1.0',
+    'protocolName': 'PCR v2.2.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a Generic PCR or a ddPCR'
     }
@@ -89,6 +89,7 @@ def add_parameters(parameters: protocol_api.Parameters):
         description="Looking to initialize Opentrons csv commands."
     )
     """
+
 
 def parse_sample_template(input_file):
     """
@@ -459,7 +460,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
         reagent_source_well = target_info_dict[int(target)][0]
         reagent_source_labware = labware_dict[reagent_slot]
         target_well_list = target_well_dict[target]
-        '''
+
         reagent_aspirated = float(args.MasterMixPerRxn)
         reagent_well_vol = float(target_info_dict[int(target)][2])
         reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
@@ -467,6 +468,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
         reagent_pipette, reagent_loop, reagent_volume = \
             Utilities.pipette_selection(left_pipette, right_pipette, reagent_aspirated)
         '''
+        Distribute does not work with Multiplex master mixes.
         # Use distribute command to dispense master mix.
         destination_wells = []
         for well in target_well_list:
@@ -477,7 +479,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
                             destination_wells,
                             float(args.MasterMixPerRxn)
                             )
-
+        
         # Drop any tips the pipettes might have.
         if left_pipette.has_tip:
             left_pipette.drop_tip()
@@ -501,7 +503,7 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
             left_pipette.drop_tip()
         if right_pipette.has_tip:
             right_pipette.drop_tip()
-        '''
+
     return
 
 
