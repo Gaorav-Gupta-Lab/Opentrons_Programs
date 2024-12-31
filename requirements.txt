@@ -1,2 +1,4 @@
-opentrons>=7.5.0
+opentrons>=8.1.0
 natsort>=8.0.0
+numpy>=1.20.0
+pyserial~=3.5

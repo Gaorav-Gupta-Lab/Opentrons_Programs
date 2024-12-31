@@ -1,39 +1,35 @@
 import datetime
 import os
-import sys
+# import sys
 import csv
 import platform
+import serial
+import time
 from types import SimpleNamespace
 from contextlib import suppress
 from collections import defaultdict
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 import math
-# import Tool_Box
-
-# Check if we are on the OT-2, Robotron, or some other computer.
-template_parser_path = "{0}var{0}lib{0}jupyter{0}notebooks".format(os.sep)
-if not os.path.exists(template_parser_path):
-    # This is Robotron, the OT-2 controller computer.
-    template_parser_path = "C:{0}Opentrons_Programs".format(os.sep)
-
-    # This is the development computer
-    if not os.path.exists(template_parser_path):
-        template_parser_path = \
-            "C:/Users/dennis/OneDrive - University of North Carolina at Chapel Hill/Projects/Programs/Opentrons_Programs"
-sys.path.insert(0, template_parser_path)
+import Tool_Box
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v2.2.0',
+    'protocolName': 'PCR v3.0.0b',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
-    'description': 'Setup a Generic PCR or a ddPCR'
+    'description': 'Setup a ddPCR or Generic PCR'
     }
 
 # requirements
 requirements = {"robotType": "OT-2", "apiLevel": "2.20"}
 
 def add_parameters(parameters: protocol_api.Parameters):
+
+    """
+    Parse the TSV file and fill in some parameter information.  This is duplicated from Utilities.  I don't know
+    another method to pass the information.
+    @param parameters:
+    """
     # TSV file location on OT-2
     tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
 
@@ -41,17 +37,49 @@ def add_parameters(parameters: protocol_api.Parameters):
     if not os.path.isfile(tsv_file_path):
         tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
-    sample_parameters, args = parse_sample_template(tsv_file_path)
+    line_num = 0
+    options_dictionary = defaultdict(str)
+    sample_dictionary = defaultdict(list)
+    index_file = list(csv.reader(open(tsv_file_path), delimiter='\t'))
 
-    # run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
-    # run_date = datetime.datetime.today().strftime("%d-%b-%Y")
+    for line in index_file:
+        if line_num == 0:
+            options_dictionary["Version"] = line[1]
+            options_dictionary["Template"] = line[0].strip("#")
+        line_num += 1
+        col_count = len(line)
+        tmp_line = []
+        sample_key = ""
+        if col_count > 0 and "#" not in line[0] and len(line[0].split("#")[0]) > 0:
+            # Skip any lines that are blank or comments.
+            for i in range(7):
+                try:
+                    line[i] = line[i].split("#")[0]  # Strip out end of line comments.
+                except IndexError:
+                    continue
+
+                if i == 0 and "--" in line[0]:
+                    key = line[0].strip('--')
+                    key_value = line[1]
+                    if "Target_" in key or "PositiveControl_" in key:
+                        key_value = (line[1], line[2], line[3])
+                    options_dictionary[key] = key_value
+                elif "--" not in line[0] and int(line[0]) < 12:
+                    sample_key = line[0], line[1]
+                    tmp_line.append(line[i])
+            if sample_key:
+                sample_dictionary[sample_key] = tmp_line
+
+    args = SimpleNamespace(**options_dictionary)
+
+    # We have limited space for the run_label.  To make sure the label is unique, I use a unix timestamp for the run_date.
     run_date = datetime.datetime.today().strftime("%f")
     run_type = args.Template.split(" ")[1]
 
     # This is used by the Opentrons app to make each run unique.
     parameters.add_str(
         variable_name="run_label",
-        display_name="Run Label",
+        display_name="Begin {} for {} {}".format(run_type, args.User, run_date),
         choices=[
             {"display_name": "Run Label", "value": "Begin {} for {} {}".format(run_type, args.User, run_date)},],
         default="Begin {} for {} {}".format(run_type, args.User, run_date),
@@ -75,14 +103,7 @@ def add_parameters(parameters: protocol_api.Parameters):
         default="p20_single_gen2",
     )
 
-    """
-        parameters.add_bool(
-        variable_name="{}1".format(run_type),
-        display_name="{} {} {}".format(run_type, args.User, run_date),
-        description="Loading run information.",
-        default=True
-    )
-    
+    """   
     parameters.add_csv_file(
         variable_name="dragons_run",
         display_name="Dragon Hunting",
@@ -91,7 +112,7 @@ def add_parameters(parameters: protocol_api.Parameters):
     """
 
 
-def parse_sample_template(input_file):
+def movedparse_sample_template(input_file):
     """
     Parse the TSV file and return data objects to run def.
     @param input_file:
@@ -131,7 +152,7 @@ def parse_sample_template(input_file):
     return sample_dictionary, SimpleNamespace(**options_dictionary)
 
 
-def labware_parsing(args, protocol):
+def movedlabware_parsing(args, protocol):
     # Extract Slot information
     slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
     labware_dict = {}
@@ -139,7 +160,9 @@ def labware_parsing(args, protocol):
     tipbox_dict = \
         {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
          "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
-         "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]}
+         "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]
+         }
+
     # Pipette Tip Boxes
     left_tiprack_list = []
     right_tiprack_list = []
@@ -149,7 +172,7 @@ def labware_parsing(args, protocol):
         if labware:
             slot_dict[str(i + 1)] = labware
             labware_dict[str(i + 1)] = protocol.load_labware(labware, str(i + 1))
-            # if labware in tipbox_dict[args.LeftPipette]:
+
             if labware in tipbox_dict[protocol.params.left_pipette]:
                 left_tiprack_list.append(labware_dict[str(i + 1)])
             elif labware in tipbox_dict[protocol.params.right_pipette]:
@@ -169,7 +192,7 @@ def plate_layout(labware):
     if "384_" in labware:
         column_count = 32
         row_count = 12
-    elif "96_" or "8_well" in labware:
+    elif "96_" or "8_well" or "ddpcr_plate" in labware:
         column_count = 12
         row_count = 8
 
@@ -315,42 +338,43 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
 
 
 def run(protocol: protocol_api.ProtocolContext):
+    # Turn off rail lights.
+    protocol.set_rail_lights(False)
 
-    # TSV file location on OT-2
-    tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
-
-    # If not on the OT-2, get temp TSV file location on Windows Computers for simulation
-    if not os.path.isfile(tsv_file_path):
-        tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
-
-    sample_parameters, args = parse_sample_template(tsv_file_path)
+    utility = Utilities(protocol)
+    sample_parameters, args = utility.parse_sample_template()
+    utility.labware_parsing()
     protocol.comment(protocol.params.run_label)
 
-    # Turn on rail lights and pause program so user can load robot deck.
-    # protocol.set_rail_lights(True)
-    # protocol.pause("Load Labware onto robot deck and click resume when ready to continue")
-    # protocol.home()
-    protocol.set_rail_lights(False)
-    labware_dict, slot_dict, left_tiprack_list, right_tiprack_list = labware_parsing(args, protocol)
+    if bool(args.UseTemperatureModule):
+        temp_mod = ColdPlateSlimDriver(protocol)
+        temp_mod.set_temperature(args.Temperature)
+
+    left_tipracks, right_tipracks = utility.tipracks
+    labware, slot_dict = utility.deck_layout
 
     # Pipettes
-    left_pipette = protocol.load_instrument(protocol.params.left_pipette, 'left', tip_racks=left_tiprack_list)
-    right_pipette = protocol.load_instrument(protocol.params.right_pipette, 'right', tip_racks=right_tiprack_list)
+    left_pipette = protocol.load_instrument(protocol.params.left_pipette, 'left', tip_racks=left_tipracks)
+    right_pipette = protocol.load_instrument(protocol.params.right_pipette, 'right', tip_racks=right_tipracks)
 
     # Set the location of the first tip in box.
     with suppress(IndexError):
-        left_pipette.starting_tip = left_tiprack_list[0].wells_by_name()[args.LeftPipetteFirstTip.upper()]
+        left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip.upper()]
     with suppress(IndexError):
-        right_pipette.starting_tip = right_tiprack_list[0].wells_by_name()[args.RightPipetteFirstTip.upper()]
+        right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip.upper()]
 
     target_info_dict = defaultdict(list)
 
     # Read targeting parameters into dictionary
     for i in range(10):
         target = getattr(args, "Target_{}".format(i + 1))
-        if target:
+
+        if len(target[0]) > 1:
+            """
             if not all('' == s or s.isspace() for s in target):
                 target_info_dict[i + 1] = target
+            """
+            target_info_dict[i + 1] = target
 
     sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol = \
         sample_processing(args, sample_parameters, target_info_dict, slot_dict)
@@ -385,19 +409,27 @@ def run(protocol: protocol_api.ProtocolContext):
             pass
 
     # Now do the actual dispensing.
-    water_aspirated = dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipette)
+    water_aspirated = dispense_water(args, labware, water_well_dict, left_pipette, right_pipette)
 
-    dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict, left_pipette, right_pipette)
+    dispense_reagent_mix(args, labware, target_well_dict, target_info_dict, left_pipette, right_pipette)
 
-    water_aspirated = dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_parameters, left_pipette,
+    water_aspirated = dispense_samples(args, labware, sample_data_dict, slot_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated)
     if "ddPCR" in args.Template:
-        fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette)
+        fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette)
 
-    protocol.comment("\nProgram Complete")
+    if args.UseTemperatureModule == "True":
+        protocol.set_rail_lights(True)
+        protocol.comment("\nProgram is complete. Click RESUME to exit.  Temperature is holding at {}"
+                         .format(temp_mod.get_temp()))
+        protocol.pause()
+        temp_mod.deactivate()
+        protocol.set_rail_lights(False)
+    else:
+        protocol.comment("\nProgram Complete")
 
     if not protocol.is_simulating():
-        os.remove(tsv_file_path)
+        os.remove(utility.parameter_file)
 
 
 def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette):
@@ -530,6 +562,8 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
     water_tip_height = Utilities.res_tip_height(float(args.WaterResVol), water_res_well_dia, cone_vol, bottom_offset)
     water_aspirated = 0
     '''
+    # left_pipette = utility.left_pipette
+    # right_pipette = utility.right_pipette
 
     destination_wells = []
     dispense_vol = []
@@ -826,6 +860,257 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
             pipette.drop_tip()
 
         return pipette
+
+
+class ColdPlateSlimDriver:
+    """
+    From Parhelia.  Class to control their temperature module.
+    @todo Need to find out if the Opentrons built in module will work.
+    """
+    def __init__(self, protocol_context, temp_mode_number=0):
+        self.serial_number = "29533"
+        self.device_name = "/dev/ttyUSB" + str(temp_mode_number)
+        self.baudrate = 9600
+        self.bytesize = serial.EIGHTBITS
+        self.parity = serial.PARITY_NONE
+        self.stopbits = serial.STOPBITS_ONE
+        self.read_timeout = 2
+        self.write_timeout = 2
+        self.height = 45
+        # self.temp = 20
+        self.temp = None
+        self.protocol = protocol_context
+
+        # check context, skip if simulating Linux
+        if protocol_context.is_simulating():
+            self.protocol.comment("Simulation detected. Initializing Temperature Module in the dummy mode\n")
+            self.serial_object = None
+        else:
+            self.protocol.comment("Execution mode detected.Initializing Temperature Module in the real deal mode\n")
+            self.serial_object = serial.Serial(
+                port=self.device_name,
+                baudrate=self.baudrate,
+                bytesize=self.bytesize,
+                parity=self.parity,
+                stopbits=self.stopbits,
+                timeout=self.read_timeout,
+                write_timeout=self.write_timeout,
+            )
+
+    @property
+    def temperature(self):
+        return self.get_temp()
+
+    def _reset_buffers(self):
+        """
+        Worker function
+        """
+        if self.serial_object is None:
+            return
+        self.serial_object.reset_input_buffer()
+        self.serial_object.reset_output_buffer()
+
+    def _read_response(self):
+        """
+        Worker function
+        """
+        if self.serial_object is None:
+            return "dummy response"
+
+        output_lines = self.serial_object.readlines()
+        output_string = "".join(l.decode("utf-8") for l in output_lines)
+        return output_string
+
+    def _send_command(self, my_command):
+        """
+        Worker function
+        """
+        SERIAL_ACK = "\r\n"
+
+        command = my_command
+        command += SERIAL_ACK
+
+        if self.serial_object is None:
+            print("sending dummy command: " + my_command)
+            return
+
+        self.serial_object.write(command.encode())
+        self.serial_object.flush()
+        return self._read_response()
+
+    def get_info(self):
+        if self.serial_object is None:
+            return "dummy info"
+        return self._send_command("info")
+
+    def get_temp(self):
+        if self.serial_object is None:
+            return self.temp
+        t = self._send_command("getTempActual")
+        return float(t)
+
+    def set_temperature(self, my_temp):
+        if self.serial_object is None:
+            self.temp = my_temp
+            return
+        # temp = float(my_temp) * 10
+        # temp = int(temp)
+        temp = int(my_temp)
+        self._send_command(f"setTempTarget{temp:03}")
+        self._send_command("tempOn")
+        self._set_temp_andWait(my_temp)
+
+    def _set_temp_andWait(self, target_temp, timeout_min=30, tolerance=1.0):
+        interval_sec = 10
+        seconds_in_min = 60
+        time_elapsed = 0
+
+        while abs(self.get_temp() - target_temp) > tolerance:
+            self.protocol.comment("Temp Module is {}C on its way to {}C.  Waiting for {} seconds\n"
+                                  .format(self.get_temp(), target_temp, time_elapsed))
+
+            if not self.protocol.is_simulating():  # Skip delay during simulation
+                time.sleep(interval_sec)
+            time_elapsed += interval_sec
+            if time_elapsed > timeout_min * seconds_in_min:
+                raise Exception("Temperature timeout")
+
+        # return target_temp
+
+    def deactivate(self):
+        if self.serial_object is None:
+            self.temp = 25
+        else:
+            self._send_command("tempOff")
+            self.serial_object.close()
+
+    def time_to_reach_sample_temp(self, delta_temp):
+        x = delta_temp
+        if (x > 0):
+            time_min = 0.364 + 0.559 * x - 0.0315 * x ** 2 + 1.29E-03 * x ** 3 - 2.46E-05 * x ** 4 + 2.21E-07 * x ** 5 - 7.09E-10 * x ** 6
+        else:
+            time_min = -0.1 - 0.329 * x - 0.00413 * x ** 2 - 0.0000569 * x ** 3 + 0.0000000223 * x ** 4
+        return time_min
+
+    def quick_temp(self, temp_target, overshot=10, undershot=2):
+        if testmode:
+            pass
+        else:
+            start_temp = self.get_temp()
+            delta_temp = temp_target - start_temp
+
+            if delta_temp > 0:
+                overshot_temp = min(temp_target + overshot, 99.9)
+                undershot_temp = delta_temp - undershot
+            else:
+                overshot_temp = max(temp_target - overshot, -10)
+                undershot_temp = delta_temp + undershot
+
+            delay_min = self.time_to_reach_sample_temp(undershot_temp)
+            delay_seconds = delay_min * 60
+
+            self.protocol.comment(
+                f"Setting temperature Target temp: {temp_target}\n C. Temp transition time: {delay_min} minutes")
+            self.set_temp(overshot_temp)
+            if not self.protocol.is_simulating():
+                time.sleep(delay_seconds)
+            self.set_temp(temp_target)
+
+        if testmode:
+            self.protocol.comment(
+                f"Setting temperature Target temp: {temp_target}\n C.Ramp skipped for testmode")
+            self.set_temp(temp_target)
+
+class Utilities:
+    def __init__(self, protocol):
+
+        # TSV file location on OT-2
+        tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
+
+        # If not on the OT-2, get temp TSV file location on Windows Computers for simulation
+        if not os.path.isfile(tsv_file_path):
+            tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
+
+        self.parameter_file = tsv_file_path
+        self.sample_dictionary = defaultdict(list)
+        self.protocol = protocol
+        self.args = None
+        self.slot_list = \
+            ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
+        self.tipbox_dict = \
+            {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
+             "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
+             "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]
+             }
+        self._labware_dict = {}
+        self._slot_dict = {}
+        self._left_tiprack_list = []
+        self._right_tiprack_list = []
+        self.left_pipette = None
+        self.right_pipette = None
+        # self.labware_parsing()
+
+    @ property
+    def tipracks(self):
+        return self._left_tiprack_list, self._right_tiprack_list
+
+    @ property
+    def deck_layout(self):
+        return self._labware_dict, self._slot_dict
+
+    def labware_parsing(self):
+
+        for i in range(11):
+            labware = getattr(self.args, "{}".format(self.slot_list[i]))
+
+            if labware:
+                self._slot_dict[str(i + 1)] = labware
+                self._labware_dict[str(i + 1)] = self.protocol.load_labware(labware, str(i + 1))
+
+                if labware in self.tipbox_dict[self.protocol.params.left_pipette]:
+                    self._left_tiprack_list.append(self._labware_dict[str(i + 1)])
+                elif labware in self.tipbox_dict[self.protocol.params.right_pipette]:
+                    self._right_tiprack_list.append(self._labware_dict[str(i + 1)])
+
+    def parse_sample_template(self):
+        """
+        Parse the TSV file and return data objects to run def.
+        @return:
+        """
+        line_num = 0
+        options_dictionary = defaultdict(str)
+        index_file = list(csv.reader(open(self.parameter_file), delimiter='\t'))
+
+        for line in index_file:
+            if line_num == 0:
+                options_dictionary["Version"] = line[1]
+                options_dictionary["Template"] = line[0].strip("#")
+            line_num += 1
+            col_count = len(line)
+            tmp_line = []
+            sample_key = ""
+            if col_count > 0 and "#" not in line[0] and len(line[0].split("#")[0]) > 0:
+                # Skip any lines that are blank or comments.
+                for i in range(7):
+                    try:
+                        line[i] = line[i].split("#")[0]  # Strip out end of line comments.
+                    except IndexError:
+                        continue
+
+                    if i == 0 and "--" in line[0]:
+                        key = line[0].strip('--')
+                        key_value = line[1]
+                        if "Target_" in key or "PositiveControl_" in key:
+                            key_value = (line[1], line[2], line[3])
+                        options_dictionary[key] = key_value
+                    elif "--" not in line[0] and int(line[0]) < 12:
+                        sample_key = line[0], line[1]
+                        tmp_line.append(line[i])
+                if sample_key:
+                    self.sample_dictionary[sample_key] = tmp_line
+
+        self.args = SimpleNamespace(**options_dictionary)
+        return self.sample_dictionary, self.args
 
 
 if __name__ == "__main__":
