@@ -346,8 +346,12 @@ def run(protocol: protocol_api.ProtocolContext):
     utility.labware_parsing()
     protocol.comment(protocol.params.run_label)
 
+    robot = False
+    if os.path.isfile("{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)):
+        robot = True
+
     if bool(args.UseTemperatureModule):
-        temp_mod = ColdPlateSlimDriver(protocol)
+        temp_mod = ColdPlateSlimDriver(protocol, robot)
         temp_mod.set_temperature(args.Temperature)
 
     left_tipracks, right_tipracks = utility.tipracks
@@ -867,7 +871,7 @@ class ColdPlateSlimDriver:
     From Parhelia.  Class to control their temperature module.
     @todo Need to find out if the Opentrons built in module will work.
     """
-    def __init__(self, protocol_context, temp_mode_number=0):
+    def __init__(self, protocol_context, temp_mode_number=0, robot=None):
         self.serial_number = "29533"
         self.device_name = "/dev/ttyUSB" + str(temp_mode_number)
         self.baudrate = 9600
@@ -882,7 +886,7 @@ class ColdPlateSlimDriver:
         self.protocol = protocol_context
 
         # check context, skip if simulating Linux
-        if protocol_context.is_simulating():
+        if protocol_context.is_simulating() and not robot:
             self.protocol.comment("Simulation detected. Initializing Temperature Module in the dummy mode\n")
             self.serial_object = None
         else:
