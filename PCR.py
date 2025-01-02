@@ -812,7 +812,7 @@ class ColdPlateSlimDriver:
         self.write_timeout = 2
         self.height = 45
         # self.temp = 20
-        self.target_temp = None
+        self.target_temp = 20
         self.protocol = protocol_context
 
         # check context, skip if simulating Linux
@@ -830,10 +830,6 @@ class ColdPlateSlimDriver:
                 timeout=self.read_timeout,
                 write_timeout=self.write_timeout,
             )
-
-    @property
-    def temperature(self):
-        return self.get_temp()
 
     def _reset_buffers(self):
         """
@@ -879,7 +875,7 @@ class ColdPlateSlimDriver:
 
     def get_temp(self):
         if self.serial_object is None:
-            return self.temp
+            return self.target_temp
         t = self._send_command("getTempActual")
         return float(t)
 
@@ -887,14 +883,14 @@ class ColdPlateSlimDriver:
         if self.serial_object is None:
             self.target_temp = my_temp
             return
-        # temp = float(my_temp) * 10
-        # temp = int(temp)
-        temp = int(my_temp)
+        temp = float(self.target_temp) * 10
+        temp = int(temp)
         self._send_command(f"setTempTarget{temp:03}")
         self._send_command("tempOn")
-        self._set_temp_andWait()
+        if not self.protocol.is_simulating():
+            self._set_temp_andWait()
 
-    def _set_temp_andWait(self, timeout_min=30, tolerance=1.0):
+    def _set_temp_andWait(self, timeout_min=30, tolerance=2.0):
         interval_sec = 10
         seconds_in_min = 60
         time_elapsed = 0
