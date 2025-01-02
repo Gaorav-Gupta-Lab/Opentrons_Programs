@@ -8,6 +8,7 @@ import time
 from types import SimpleNamespace
 from contextlib import suppress
 from collections import defaultdict
+import serial.tools.list_ports as port_list
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 import math
@@ -110,75 +111,6 @@ def add_parameters(parameters: protocol_api.Parameters):
         description="Looking to initialize Opentrons csv commands."
     )
     """
-
-
-def movedparse_sample_template(input_file):
-    """
-    Parse the TSV file and return data objects to run def.
-    @param input_file:
-    @return:
-    """
-    line_num = 0
-    options_dictionary = defaultdict(str)
-    sample_dictionary = defaultdict(list)
-    index_file = list(csv.reader(open(input_file), delimiter='\t'))
-    for line in index_file:
-        if line_num == 0:
-            options_dictionary["Version"] = line[1]
-            options_dictionary["Template"] = line[0].strip("#")
-        line_num += 1
-        col_count = len(line)
-        tmp_line = []
-        sample_key = ""
-        if col_count > 0 and "#" not in line[0] and len(line[0].split("#")[0]) > 0:
-            # Skip any lines that are blank or comments.
-            for i in range(7):
-                try:
-                    line[i] = line[i].split("#")[0]  # Strip out end of line comments.
-                except IndexError:
-                    continue
-
-                if i == 0 and "--" in line[0]:
-                    key = line[0].strip('--')
-                    key_value = line[1]
-                    if "Target_" in key or "PositiveControl_" in key:
-                        key_value = (line[1], line[2], line[3])
-                    options_dictionary[key] = key_value
-                elif "--" not in line[0] and int(line[0]) < 12:
-                    sample_key = line[0], line[1]
-                    tmp_line.append(line[i])
-            if sample_key:
-                sample_dictionary[sample_key] = tmp_line
-    return sample_dictionary, SimpleNamespace(**options_dictionary)
-
-
-def movedlabware_parsing(args, protocol):
-    # Extract Slot information
-    slot_list = ["Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7", "Slot8", "Slot9", "Slot10", "Slot11"]
-    labware_dict = {}
-    slot_dict = {}
-    tipbox_dict = \
-        {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
-         "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
-         "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]
-         }
-
-    # Pipette Tip Boxes
-    left_tiprack_list = []
-    right_tiprack_list = []
-    for i in range(11):
-        labware = getattr(args, "{}".format(slot_list[i]))
-
-        if labware:
-            slot_dict[str(i + 1)] = labware
-            labware_dict[str(i + 1)] = protocol.load_labware(labware, str(i + 1))
-
-            if labware in tipbox_dict[protocol.params.left_pipette]:
-                left_tiprack_list.append(labware_dict[str(i + 1)])
-            elif labware in tipbox_dict[protocol.params.right_pipette]:
-                right_tiprack_list.append(labware_dict[str(i + 1)])
-
-    return labware_dict, slot_dict, left_tiprack_list, right_tiprack_list
 
 
 def plate_layout(labware):
@@ -346,12 +278,8 @@ def run(protocol: protocol_api.ProtocolContext):
     utility.labware_parsing()
     protocol.comment(protocol.params.run_label)
 
-    robot = False
-    if os.path.isfile("{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)):
-        robot = True
-
     if bool(args.UseTemperatureModule):
-        temp_mod = ColdPlateSlimDriver(protocol, robot)
+        temp_mod = ColdPlateSlimDriver(protocol)
         temp_mod.set_temperature(args.Temperature)
 
     left_tipracks, right_tipracks = utility.tipracks
@@ -727,14 +655,16 @@ def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
         pipette.flow_rate.aspirate = 30
         pipette.flow_rate.dispense = 10
         pipette.flow_rate.blow_out = 50
+        disposal_vol = 2
     elif "P20 Single-Channel GEN2" in str(pipette):
         default_rate = p20_default_rate
-        pipette.flow_rate.aspirate = 7.0
+        pipette.flow_rate.aspirate = 6.5
         pipette.flow_rate.dispense = 5.0
         pipette.flow_rate.blow_out = 7.0
+        disposal_vol = 15
 
     pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells,
-                       touch_tip=True, radius=0.75, v_offset=-4, speed=40, blow_out=True, disposal_volume=10,
+                       touch_tip=True, radius=0.75, v_offset=-4, speed=40, blow_out=True, disposal_volume=disposal_vol,
                        blowout_location='source well')
 
     pipette.flow_rate.aspirate = default_rate
@@ -871,7 +801,7 @@ class ColdPlateSlimDriver:
     From Parhelia.  Class to control their temperature module.
     @todo Need to find out if the Opentrons built in module will work.
     """
-    def __init__(self, protocol_context, temp_mode_number=0, robot=None):
+    def __init__(self, protocol_context, temp_mode_number=0):
         self.serial_number = "29533"
         self.device_name = "/dev/ttyUSB" + str(temp_mode_number)
         self.baudrate = 9600
@@ -886,7 +816,7 @@ class ColdPlateSlimDriver:
         self.protocol = protocol_context
 
         # check context, skip if simulating Linux
-        if protocol_context.is_simulating() and not robot:
+        if protocol_context.is_simulating():
             self.protocol.comment("Simulation detected. Initializing Temperature Module in the dummy mode\n")
             self.serial_object = None
         else:
@@ -1118,6 +1048,9 @@ class Utilities:
 
 
 if __name__ == "__main__":
+    ports = list(port_list.comports())
+    for p in ports:
+        print(p)
     protocol_file = open('PCR.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])

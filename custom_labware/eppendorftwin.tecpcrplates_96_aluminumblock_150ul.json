@@ -129,7 +129,7 @@
     },
     "metadata": {
         "displayName": "Eppendorf Twin.tec® ddPCR Plates 96 Aluminum Block 150 µL",
-        "displayCategory": "aluminumBlock",
+        "displayCategory": "wellPlate",
         "displayVolumeUnits": "µL",
         "tags": []
     },
@@ -144,7 +144,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -153,7 +153,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -162,7 +162,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -171,7 +171,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -180,7 +180,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -189,7 +189,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -198,7 +198,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -207,7 +207,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 14.38,
+            "x": 14.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -216,7 +216,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -225,7 +225,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -234,7 +234,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -243,7 +243,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -252,7 +252,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -261,7 +261,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -270,7 +270,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -279,7 +279,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 23.38,
+            "x": 23.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -288,7 +288,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -297,7 +297,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -306,7 +306,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -315,7 +315,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -324,7 +324,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -333,7 +333,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -342,7 +342,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -351,7 +351,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 32.38,
+            "x": 32.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -360,7 +360,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -369,7 +369,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -378,7 +378,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -387,7 +387,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -396,7 +396,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -405,7 +405,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -414,7 +414,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -423,7 +423,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 41.38,
+            "x": 41.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -432,7 +432,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -441,7 +441,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -450,7 +450,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -459,7 +459,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -468,7 +468,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -477,7 +477,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -486,7 +486,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -495,7 +495,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 50.38,
+            "x": 50.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -504,7 +504,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -513,7 +513,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -522,7 +522,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -531,7 +531,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -540,7 +540,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -549,7 +549,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -558,7 +558,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -567,7 +567,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 59.38,
+            "x": 59.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -576,7 +576,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -585,7 +585,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -594,7 +594,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -603,7 +603,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -612,7 +612,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -621,7 +621,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -630,7 +630,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -639,7 +639,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 68.38,
+            "x": 68.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -648,7 +648,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -657,7 +657,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -666,7 +666,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -675,7 +675,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -684,7 +684,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -693,7 +693,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -702,7 +702,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -711,7 +711,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 77.38,
+            "x": 77.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -720,7 +720,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -729,7 +729,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -738,7 +738,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -747,7 +747,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -756,7 +756,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -765,7 +765,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -774,7 +774,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -783,7 +783,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 86.38,
+            "x": 86.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -792,7 +792,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -801,7 +801,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -810,7 +810,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -819,7 +819,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -828,7 +828,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -837,7 +837,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -846,7 +846,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -855,7 +855,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 95.38,
+            "x": 95.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -864,7 +864,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -873,7 +873,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -882,7 +882,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -891,7 +891,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -900,7 +900,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -909,7 +909,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -918,7 +918,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -927,7 +927,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 104.38,
+            "x": 104.43,
             "y": 11.25,
             "z": 6.95
         },
@@ -936,7 +936,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 74.25,
             "z": 6.95
         },
@@ -945,7 +945,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 65.25,
             "z": 6.95
         },
@@ -954,7 +954,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 56.25,
             "z": 6.95
         },
@@ -963,7 +963,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 47.25,
             "z": 6.95
         },
@@ -972,7 +972,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 38.25,
             "z": 6.95
         },
@@ -981,7 +981,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 29.25,
             "z": 6.95
         },
@@ -990,7 +990,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 20.25,
             "z": 6.95
         },
@@ -999,7 +999,7 @@
             "totalLiquidVolume": 150,
             "shape": "circular",
             "diameter": 5.5,
-            "x": 113.38,
+            "x": 113.43,
             "y": 11.25,
             "z": 6.95
         }
@@ -1007,8 +1007,7 @@
     "groups": [
         {
             "metadata": {
-                "wellBottomShape": "v",
-                "displayCategory": "wellPlate"
+                "wellBottomShape": "v"
             },
             "wells": [
                 "A1",
