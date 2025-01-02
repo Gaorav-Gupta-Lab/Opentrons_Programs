@@ -280,7 +280,7 @@ def run(protocol: protocol_api.ProtocolContext):
 
     if bool(args.UseTemperatureModule):
         temp_mod = ColdPlateSlimDriver(protocol)
-        temp_mod.set_temperature(args.Temperature)
+        temp_mod.set_temperature(float(args.Temperature))
 
     left_tipracks, right_tipracks = utility.tipracks
     labware, slot_dict = utility.deck_layout
@@ -812,7 +812,7 @@ class ColdPlateSlimDriver:
         self.write_timeout = 2
         self.height = 45
         # self.temp = 20
-        self.temp = None
+        self.target_temp = None
         self.protocol = protocol_context
 
         # check context, skip if simulating Linux
@@ -885,23 +885,23 @@ class ColdPlateSlimDriver:
 
     def set_temperature(self, my_temp):
         if self.serial_object is None:
-            self.temp = my_temp
+            self.target_temp = my_temp
             return
         # temp = float(my_temp) * 10
         # temp = int(temp)
         temp = int(my_temp)
         self._send_command(f"setTempTarget{temp:03}")
         self._send_command("tempOn")
-        self._set_temp_andWait(my_temp)
+        self._set_temp_andWait()
 
-    def _set_temp_andWait(self, target_temp, timeout_min=30, tolerance=1.0):
+    def _set_temp_andWait(self, timeout_min=30, tolerance=1.0):
         interval_sec = 10
         seconds_in_min = 60
         time_elapsed = 0
 
-        while abs(self.get_temp() - target_temp) > tolerance:
+        while abs(self.get_temp() - self.target_temp) > tolerance:
             self.protocol.comment("Temp Module is {}C on its way to {}C.  Waiting for {} seconds\n"
-                                  .format(self.get_temp(), target_temp, time_elapsed))
+                                  .format(self.get_temp(), self.target_temp, time_elapsed))
 
             if not self.protocol.is_simulating():  # Skip delay during simulation
                 time.sleep(interval_sec)

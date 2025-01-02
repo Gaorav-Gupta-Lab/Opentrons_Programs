@@ -1126,9 +1126,9 @@
     },
     "stackingOffsetWithLabware": {
         "opentrons_96_well_aluminum_block": {
-            "x": 0,
-            "y": 0,
-            "z": -4.390000000000001
+            "x": 5.0,
+            "y": -3.8,
+            "z": -6.89
         }
     }
 }
