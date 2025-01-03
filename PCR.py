@@ -8,7 +8,6 @@ import time
 from types import SimpleNamespace
 from contextlib import suppress
 from collections import defaultdict
-import serial.tools.list_ports as port_list
 from opentrons import protocol_api
 from opentrons.simulate import simulate, format_runlog
 import math
@@ -16,7 +15,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.0.0',
+    'protocolName': 'PCR v3.0.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -387,8 +386,8 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
         # cone_vol = Utilities.labware_cone_volume(args, reagent_labware)
         # cone_vol = Utilities.labware_cone_volume(args, args.ReagentSlot)
         cone_vol = labware_cone_volume(args, args.ReagentSlot)
-        fill_pipette, fill_loop, fill_vol = \
-            pipette_selection(left_pipette, right_pipette, float(args.PCR_Volume))
+        fill_pipette = \
+            pipette_selection(left_pipette, right_pipette, water_aspirated)
         water_tip_height = \
             res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia, cone_vol,
                                      bottom_offset)
@@ -396,12 +395,12 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
         for i in range(wells_remaining):
             blank_well = "{}{}".format(row_list[i+row_index+1], column)
 
-            dispensing_loop(args, fill_loop, fill_pipette,
-                                      reagent_labware[args.WaterResWell].bottom(water_tip_height),
-                                      sample_destination_labware[blank_well], fill_vol,
-                                      NewTip=False, MixReaction=False)
+            pipette_reagents(args, fill_pipette,
+                             reagent_labware[args.WaterResWell].bottom(water_tip_height),
+                             sample_destination_labware[blank_well], float(args.PCR_Volume),
+                             NewTip=False, MixReaction=False)
 
-            water_aspirated = water_aspirated+fill_vol
+            water_aspirated = water_aspirated+float(args.PCR_Volume)
             water_tip_height = res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia,
                                                         cone_vol, bottom_offset)
         fill_pipette.drop_tip()
@@ -435,8 +434,8 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
         reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
         # reagent_cone_vol = Utilities.labware_cone_volume(args, reagent_source_labware)
         reagent_cone_vol = labware_cone_volume(args, reagent_source_labware)
-        reagent_pipette, reagent_loop, reagent_volume = \
-            pipette_selection(left_pipette, right_pipette, reagent_aspirated)
+        reagent_pipette = \
+            pipette_selection(left_pipette, right_pipette, float(args.MasterMixPerRxn))
         '''
         Distribute does not work with Multiplex master mixes.
         # Use distribute command to dispense master mix.
@@ -461,12 +460,12 @@ def dispense_reagent_mix(args, labware_dict, target_well_dict, target_info_dict,
             reagent_tip_height = res_tip_height(reagent_well_vol-reagent_aspirated, reagent_well_dia,
                                                           reagent_cone_vol, bottom_offset)
 
-            dispensing_loop(args, reagent_loop, reagent_pipette,
-                                      reagent_source_labware[reagent_source_well].bottom(reagent_tip_height),
-                                      sample_destination_labware[well], reagent_volume,
-                                      NewTip=False, MixReaction=False, touch=True, MixVolume=None)
+            pipette_reagents(args, reagent_pipette,
+                             reagent_source_labware[reagent_source_well].bottom(reagent_tip_height),
+                             sample_destination_labware[well], float(args.MasterMixPerRxn),
+                             NewTip=False, MixReaction=False, touch=True, MixVolume=None)
 
-            reagent_aspirated += reagent_volume
+            reagent_aspirated += reagent_aspirated
 
         # Drop any tips the pipettes might have.
         if left_pipette.has_tip:
@@ -510,7 +509,7 @@ def dispense_water(args, labware_dict, water_well_dict, left_pipette, right_pipe
         water_aspirated += water_well_dict[well]
 
     # Define the pipette for dispensing the water.
-    water_pipette, water_loop, water_volume = pipette_selection(left_pipette, right_pipette, water_aspirated)
+    water_pipette = pipette_selection(left_pipette, right_pipette, water_aspirated)
 
     # Use distribute command to dispense water.
     distribute_reagents(water_pipette,
@@ -568,6 +567,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
     dilution_well_index = 0
 
     for sample_key in sample_parameters:
+
         sample_source_labware = labware_dict[sample_parameters[sample_key][0]]
         sample_source_well = sample_parameters[sample_key][1]
         sample_dest_wells = sample_data_dict[sample_key][3]
@@ -580,14 +580,14 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
 
         # If no dilution is necessary, dispense sample and continue
         if diluted_sample_vol == 0:
-            sample_pipette, sample_loop, sample_vol = \
+            sample_pipette = \
                 pipette_selection(left_pipette, right_pipette, sample_vol)
 
             for well in sample_dest_wells:
-                dispensing_loop(args, sample_loop, sample_pipette,
-                                          sample_source_labware[sample_source_well],
-                                          sample_destination_labware[well], sample_vol,
-                                          NewTip=True, MixReaction=True, touch=True, MixVolume=mix_volume)
+                pipette_reagents(args, sample_pipette,
+                                 sample_source_labware[sample_source_well],
+                                 sample_destination_labware[well], sample_vol,
+                                 NewTip=True, MixReaction=True, touch=True, MixVolume=mix_volume)
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
@@ -597,24 +597,24 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
         diluent_vol = round((diluent_vol*diluted_template_factor), ndigits=1)
 
         # Reset the pipettes for the new volumes
-        diluent_pipette, diluent_loop, diluent_vol = \
+        diluent_pipette = \
             pipette_selection(left_pipette, right_pipette, diluent_vol)
-        sample_pipette, sample_loop, sample_vol = \
+        sample_pipette = \
             pipette_selection(left_pipette, right_pipette, adjusted_sample_vol)
 
         # Make dilution, diluent first
         dilution_well = dilution_plate_layout[dilution_well_index]
 
-        dispensing_loop(args, diluent_loop, diluent_pipette,
-                                  reagent_labware[args.WaterResWell].bottom(water_tip_height),
-                                  dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=False,
-                                  touch=True)
+        pipette_reagents(args, diluent_pipette,
+                         reagent_labware[args.WaterResWell].bottom(water_tip_height),
+                         dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=False,
+                         touch=True)
         mix_volume = None
         if diluted_sample_vol < 20:
             mix_volume = 18
-        dispensing_loop(args, sample_loop, sample_pipette, sample_source_labware[sample_source_well],
-                                  dilution_labware[dilution_well], sample_vol, NewTip=True, MixReaction=True,
-                                  MixVolume=mix_volume)
+        pipette_reagents(args, sample_pipette, sample_source_labware[sample_source_well],
+                         dilution_labware[dilution_well], sample_vol, NewTip=True, MixReaction=True,
+                         MixVolume=mix_volume)
 
         water_aspirated += diluent_vol
         dilution_well_index += 1
@@ -624,15 +624,15 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
 
         # Add diluted sample to PCR plate
         for well in sample_dest_wells:
-            sample_pipette, sample_loop, diluted_sample_vol = \
+            sample_pipette = \
                 pipette_selection(left_pipette, right_pipette, diluted_sample_vol)
             mix_volume = None
             if diluted_sample_vol < 20:
                 mix_volume = 18
-            dispensing_loop(args, sample_loop, sample_pipette,
-                                      dilution_labware[dilution_well].bottom(bottom_offset),
-                                      sample_destination_labware[well], diluted_sample_vol, NewTip=True,
-                                      MixReaction=True, MixVolume=mix_volume)
+            pipette_reagents(args, sample_pipette,
+                             dilution_labware[dilution_well].bottom(bottom_offset),
+                             sample_destination_labware[well], diluted_sample_vol, NewTip=True,
+                             MixReaction=True, MixVolume=mix_volume)
 
         if sample_pipette.has_tip:
             sample_pipette.drop_tip()
@@ -728,7 +728,6 @@ def pipette_selection(left_pipette, right_pipette, volume):
         @return:
         """
         # ToDo: This will not run on a FLEX and is error prone.  Need to allow more pipettes
-        loop = 1
         pipette = ""
         if volume > 20:
             if "P300 Single-Channel GEN2" in str(right_pipette):
@@ -741,16 +740,15 @@ def pipette_selection(left_pipette, right_pipette, volume):
             else:
                 pipette = right_pipette
 
-        return pipette, loop, round(volume, ndigits=1)
+        return pipette
 
 
-def dispensing_loop(args, loop_count, pipette, source_location, destination_location, volume, NewTip, MixReaction,
-                        touch=False, MixVolume=None):
+def pipette_reagents(args, pipette, source_location, destination_location, volume, NewTip, MixReaction,
+                     touch=False, MixVolume=None):
         """
         Generic function to dispense material into designated well.
         @param MixVolume:
         @param args:
-        @param loop_count:
         @param pipette:
         @param source_location:
         @param destination_location:
@@ -771,19 +769,17 @@ def dispensing_loop(args, loop_count, pipette, source_location, destination_loca
         if not pipette.has_tip:
             pipette.pick_up_tip()
 
-        while loop_count > 0:
-            pipette.aspirate(volume, source_location, rate=0.75)
 
-            if touch:
-                tip_touch()
+        pipette.aspirate(volume, source_location, rate=0.75)
+        if touch:
+            tip_touch()
 
-            pipette.dispense(volume, destination_location, rate=0.75)
-            loop_count -= 1
+        pipette.dispense(volume, destination_location, rate=0.75)
 
-            if not MixReaction:
-                pipette.blow_out()
-                if touch:
-                    tip_touch()
+        if not MixReaction:
+            pipette.blow_out()
+        if touch:
+            tip_touch()
 
         if MixReaction:
             v = float(args.PCR_Volume)
@@ -994,7 +990,6 @@ class Utilities:
         return self._labware_dict, self._slot_dict
 
     def labware_parsing(self):
-
         for i in range(11):
             labware = getattr(self.args, "{}".format(self.slot_list[i]))
 
@@ -1049,9 +1044,6 @@ class Utilities:
 
 
 if __name__ == "__main__":
-    ports = list(port_list.comports())
-    for p in ports:
-        print(p)
     protocol_file = open('PCR.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
