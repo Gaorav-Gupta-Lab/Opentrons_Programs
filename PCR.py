@@ -16,7 +16,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.0.0b',
+    'protocolName': 'PCR v3.0.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -270,8 +270,8 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
 
 
 def run(protocol: protocol_api.ProtocolContext):
-    # Turn off rail lights.
-    protocol.set_rail_lights(False)
+    # Turn on rail lights.
+    protocol.set_rail_lights(True)
 
     utility = Utilities(protocol)
     sample_parameters, args = utility.parse_sample_template()
@@ -294,6 +294,10 @@ def run(protocol: protocol_api.ProtocolContext):
         left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip.upper()]
     with suppress(IndexError):
         right_pipette.starting_tip = right_tipracks[0].wells_by_name()[args.RightPipetteFirstTip.upper()]
+
+    # Turn off rail lights for actual run.
+    if not protocol.is_simulating():
+        protocol.set_rail_lights(False)
 
     target_info_dict = defaultdict(list)
 
@@ -885,10 +889,11 @@ class ColdPlateSlimDriver:
             return
         temp = float(self.target_temp) * 10
         temp = int(temp)
-        self._send_command(f"setTempTarget{temp:03}")
+        self._send_command(f"setTempTarget{temp:02}")
         self._send_command("tempOn")
         if not self.protocol.is_simulating():
             self._set_temp_andWait()
+        return
 
     def _set_temp_andWait(self, timeout_min=30, tolerance=2.0):
         interval_sec = 10
@@ -905,11 +910,11 @@ class ColdPlateSlimDriver:
             if time_elapsed > timeout_min * seconds_in_min:
                 raise Exception("Temperature timeout")
 
-        # return target_temp
+        return
 
     def deactivate(self):
         if self.serial_object is None:
-            self.temp = 25
+            self.target_temp = 25
         else:
             self._send_command("tempOff")
             self.serial_object.close()
@@ -970,7 +975,7 @@ class Utilities:
         self.tipbox_dict = \
             {"p10_multi": "opentrons_96_tiprack_10ul", "p10_single": "opentrons_96_tiprack_10ul",
              "p20_single_gen2": ["opentrons_96_tiprack_20ul", "opentrons_96_filtertiprack_20ul"],
-             "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_300ul"]
+             "p300_single_gen2": ["opentrons_96_tiprack_300ul", "opentrons_96_filtertiprack_200ul"]
              }
         self._labware_dict = {}
         self._slot_dict = {}
