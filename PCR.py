@@ -15,7 +15,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.0.1',
+    'protocolName': 'PCR v3.0.2',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -277,10 +277,6 @@ def run(protocol: protocol_api.ProtocolContext):
     utility.labware_parsing()
     protocol.comment(protocol.params.run_label)
 
-    if bool(args.UseTemperatureModule):
-        temp_mod = ColdPlateSlimDriver(protocol)
-        temp_mod.set_temperature(float(args.Temperature))
-
     left_tipracks, right_tipracks = utility.tipracks
     labware, slot_dict = utility.deck_layout
 
@@ -297,6 +293,11 @@ def run(protocol: protocol_api.ProtocolContext):
     # Turn off rail lights for actual run.
     if not protocol.is_simulating():
         protocol.set_rail_lights(False)
+
+
+    if bool(args.UseTemperatureModule):
+        temp_mod = ColdPlateSlimDriver(protocol)
+        temp_mod.quick_temp(float(args.Temperature))
 
     target_info_dict = defaultdict(list)
 
@@ -798,7 +799,8 @@ def pipette_reagents(args, pipette, source_location, destination_location, volum
 
 class ColdPlateSlimDriver:
     """
-    From Parhelia.  Class to control their temperature module.
+    (С) Parhelia Biosciences Corporation 2024-2025
+    Class to control their temperature module.
     @todo Need to find out if the Opentrons built in module will work.
     """
     def __init__(self, protocol_context, temp_mode_number=0):
@@ -874,22 +876,28 @@ class ColdPlateSlimDriver:
         return self._send_command("info")
 
     def get_temp(self):
+        """
+        Get the module temperature.
+        @return:
+        """
         if self.serial_object is None:
             return self.target_temp
-        t = self._send_command("getTempActual")
-        return float(t)
+        actual_temp = self._send_command("getTempActual")
+        return float(actual_temp)
 
     def set_temperature(self, my_temp):
+        """
+        Set the module temperature.
+        @param my_temp:
+        @return:
+        """
         if self.serial_object is None:
             self.target_temp = my_temp
             return
-        temp = float(self.target_temp) * 10
+        temp = float(my_temp) * 10
         temp = int(temp)
-        self._send_command(f"setTempTarget{temp:02}")
+        self._send_command(f"setTempTarget{temp:03}")
         self._send_command("tempOn")
-        if not self.protocol.is_simulating():
-            self._set_temp_andWait()
-        return
 
     def _set_temp_andWait(self, timeout_min=30, tolerance=2.0):
         interval_sec = 10
@@ -909,57 +917,65 @@ class ColdPlateSlimDriver:
         return
 
     def deactivate(self):
+        """
+        Shutdown the temperature module and close the serial connection.
+        """
         if self.serial_object is None:
             self.target_temp = 25
         else:
             self._send_command("tempOff")
             self.serial_object.close()
 
-    def time_to_reach_sample_temp(self, delta_temp):
+    @staticmethod
+    def time_to_reach_sample_temp(delta_temp):
         x = delta_temp
-        if (x > 0):
+        if x > 0:
             time_min = 0.364 + 0.559 * x - 0.0315 * x ** 2 + 1.29E-03 * x ** 3 - 2.46E-05 * x ** 4 + 2.21E-07 * x ** 5 - 7.09E-10 * x ** 6
         else:
             time_min = -0.1 - 0.329 * x - 0.00413 * x ** 2 - 0.0000569 * x ** 3 + 0.0000000223 * x ** 4
         return time_min
 
-    def quick_temp(self, temp_target, overshot=10, undershot=2):
-        if testmode:
-            pass
+    def quick_temp(self, temp_target, overshot=5, undershot=2):
+        """
+        Set the module temperature and apply a delay, if needed.
+        @param temp_target:
+        @param overshot:
+        @param undershot:
+        """
+        start_temp = self.get_temp()
+        delta_temp = temp_target - start_temp
+
+        if delta_temp > 0:
+            overshot_temp = min(temp_target + overshot, 99.9)
+            undershot_temp = delta_temp - undershot
         else:
-            start_temp = self.get_temp()
-            delta_temp = temp_target - start_temp
+            overshot_temp = max(temp_target - overshot, -10)
+            undershot_temp = delta_temp + undershot
 
-            if delta_temp > 0:
-                overshot_temp = min(temp_target + overshot, 99.9)
-                undershot_temp = delta_temp - undershot
-            else:
-                overshot_temp = max(temp_target - overshot, -10)
-                undershot_temp = delta_temp + undershot
+        delay_min = self.time_to_reach_sample_temp(undershot_temp)
+        delay_seconds = delay_min * 60
 
-            delay_min = self.time_to_reach_sample_temp(undershot_temp)
-            delay_seconds = delay_min * 60
-
-            self.protocol.comment(
-                f"Setting temperature Target temp: {temp_target}\n C. Temp transition time: {delay_min} minutes")
-            self.set_temp(overshot_temp)
+        # self.protocol.comment(f"Setting temperature Target temp: {temp_target}\n C. Temp transition time: {delay_min} minutes")
+        self.protocol.comment("Temp Module is {}C on its way to {}C.  Delaying program for {} seconds.\n"
+                              .format(self.get_temp(), self.target_temp, delay_seconds))
+        if delay_min > 2:
+            # Set temperature to rapidly cool or heat and delay program to allow temperature change.
+            self.set_temperature(overshot_temp)
             if not self.protocol.is_simulating():
                 time.sleep(delay_seconds)
-            self.set_temp(temp_target)
 
-        if testmode:
-            self.protocol.comment(
-                f"Setting temperature Target temp: {temp_target}\n C.Ramp skipped for testmode")
-            self.set_temp(temp_target)
+        self.set_temperature(temp_target)
+
 
 class Utilities:
     def __init__(self, protocol):
 
         # TSV file location on OT-2
         tsv_file_path = "{0}var{0}lib{0}jupyter{0}notebooks{0}ProcedureFile.tsv".format(os.sep)
-
+        self.on_ot2 = True
         # If not on the OT-2, get temp TSV file location on Windows Computers for simulation
         if not os.path.isfile(tsv_file_path):
+            self.on_ot2 = False
             tsv_file_path = "C:{0}Users{0}{1}{0}Documents{0}TempTSV.tsv".format(os.sep, os.getlogin())
 
         self.parameter_file = tsv_file_path
