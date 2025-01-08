@@ -15,7 +15,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.0.2',
+    'protocolName': 'PCR v3.0.3',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -298,6 +298,7 @@ def run(protocol: protocol_api.ProtocolContext):
     if bool(args.UseTemperatureModule):
         temp_mod = ColdPlateSlimDriver(protocol)
         temp_mod.quick_temp(float(args.Temperature))
+        print("Using Temperature Module: ", temp_mod.get_info())
 
     target_info_dict = defaultdict(list)
 
@@ -354,9 +355,10 @@ def run(protocol: protocol_api.ProtocolContext):
     if "ddPCR" in args.Template:
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette)
 
-    if args.UseTemperatureModule == "True":
+    # If using Temperature Module, hold PCR plate at set temperature until user removes it and closes program.
+    if bool(args.UseTemperatureModule):
         protocol.set_rail_lights(True)
-        protocol.comment("\nProgram is complete. Click RESUME to exit.  Temperature is holding at {}"
+        protocol.comment("\nProgram is complete.  Temperature is holding at {}. Click RESUME to exit."
                          .format(temp_mod.get_temp()))
         protocol.pause()
         temp_mod.deactivate()
@@ -813,16 +815,15 @@ class ColdPlateSlimDriver:
         self.read_timeout = 2
         self.write_timeout = 2
         self.height = 45
-        # self.temp = 20
         self.target_temp = 20
         self.protocol = protocol_context
 
         # check context, skip if simulating Linux
         if protocol_context.is_simulating():
-            self.protocol.comment("Simulation detected. Initializing Temperature Module in the dummy mode\n")
+            # self.protocol.comment("Simulation detected. Initializing Temperature Module in the dummy mode\n")
             self.serial_object = None
         else:
-            self.protocol.comment("Execution mode detected.Initializing Temperature Module in the real deal mode\n")
+            self.protocol.comment("Execution mode detected.  Initializing Temperature Module in the run mode\n")
             self.serial_object = serial.Serial(
                 port=self.device_name,
                 baudrate=self.baudrate,
@@ -847,15 +848,18 @@ class ColdPlateSlimDriver:
         Worker function
         """
         if self.serial_object is None:
-            return "dummy response"
+            return "Program is simulating"
 
         output_lines = self.serial_object.readlines()
         output_string = "".join(l.decode("utf-8") for l in output_lines)
+
         return output_string
 
     def _send_command(self, my_command):
         """
         Worker function
+        @param my_command:
+        @return:
         """
         SERIAL_ACK = "\r\n"
 
@@ -863,16 +867,19 @@ class ColdPlateSlimDriver:
         command += SERIAL_ACK
 
         if self.serial_object is None:
-            print("sending dummy command: " + my_command)
+            print("Simulating: " + my_command)
+
             return
 
         self.serial_object.write(command.encode())
         self.serial_object.flush()
+
         return self._read_response()
 
     def get_info(self):
         if self.serial_object is None:
-            return "dummy info"
+            return "Simulating or no temperature module detected."
+
         return self._send_command("info")
 
     def get_temp(self):
@@ -882,39 +889,25 @@ class ColdPlateSlimDriver:
         """
         if self.serial_object is None:
             return self.target_temp
-        actual_temp = self._send_command("getTempActual")
-        return float(actual_temp)
+
+        actual_temp = round(float(self._send_command("getTempActual")), 1)
+        return actual_temp
 
     def set_temperature(self, my_temp):
         """
-        Set the module temperature.
+        Send temperature command to the module.
         @param my_temp:
         @return:
         """
         if self.serial_object is None:
             self.target_temp = my_temp
+
             return
+
         temp = float(my_temp) * 10
         temp = int(temp)
         self._send_command(f"setTempTarget{temp:03}")
         self._send_command("tempOn")
-
-    def _set_temp_andWait(self, timeout_min=30, tolerance=2.0):
-        interval_sec = 10
-        seconds_in_min = 60
-        time_elapsed = 0
-
-        while abs(self.get_temp() - self.target_temp) > tolerance:
-            self.protocol.comment("Temp Module is {}C on its way to {}C.  Waiting for {} seconds\n"
-                                  .format(self.get_temp(), self.target_temp, time_elapsed))
-
-            if not self.protocol.is_simulating():  # Skip delay during simulation
-                time.sleep(interval_sec)
-            time_elapsed += interval_sec
-            if time_elapsed > timeout_min * seconds_in_min:
-                raise Exception("Temperature timeout")
-
-        return
 
     def deactivate(self):
         """
@@ -928,14 +921,21 @@ class ColdPlateSlimDriver:
 
     @staticmethod
     def time_to_reach_sample_temp(delta_temp):
+        """
+        Estimate the time in minutes required for module to reach target temperature.
+        @param delta_temp:
+        @return:
+        """
         x = delta_temp
+
         if x > 0:
             time_min = 0.364 + 0.559 * x - 0.0315 * x ** 2 + 1.29E-03 * x ** 3 - 2.46E-05 * x ** 4 + 2.21E-07 * x ** 5 - 7.09E-10 * x ** 6
         else:
             time_min = -0.1 - 0.329 * x - 0.00413 * x ** 2 - 0.0000569 * x ** 3 + 0.0000000223 * x ** 4
-        return time_min
 
-    def quick_temp(self, temp_target, overshot=5, undershot=2):
+        return round(time_min, 2)
+
+    def quick_temp(self, temp_target, overshot=3, undershot=2):
         """
         Set the module temperature and apply a delay, if needed.
         @param temp_target:
@@ -953,14 +953,18 @@ class ColdPlateSlimDriver:
             undershot_temp = delta_temp + undershot
 
         delay_min = self.time_to_reach_sample_temp(undershot_temp)
-        delay_seconds = delay_min * 60
+        delay_seconds = round((delay_min * 60), 1)
 
-        # self.protocol.comment(f"Setting temperature Target temp: {temp_target}\n C. Temp transition time: {delay_min} minutes")
-        self.protocol.comment("Temp Module is {}C on its way to {}C.  Delaying program for {} seconds.\n"
-                              .format(self.get_temp(), self.target_temp, delay_seconds))
-        if delay_min > 2:
+        self.protocol.comment("Temp Module is {}C on its way to {}C."
+                              .format(self.get_temp(), temp_target, delay_seconds))
+
+        if delay_min > 3:
             # Set temperature to rapidly cool or heat and delay program to allow temperature change.
             self.set_temperature(overshot_temp)
+
+            self.protocol.comment("Delaying program for {} seconds to allow Temp Module to reach {}C."
+                                  .format(delay_seconds, temp_target))
+
             if not self.protocol.is_simulating():
                 time.sleep(delay_seconds)
 
