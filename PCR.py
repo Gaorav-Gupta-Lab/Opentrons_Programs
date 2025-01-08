@@ -14,7 +14,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.1.2',
+    'protocolName': 'PCR v3.1.3',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -294,7 +294,7 @@ def run(protocol: protocol_api.ProtocolContext):
         protocol.set_rail_lights(False)
 
 
-    if bool(args.UseTemperatureModule):
+    if bool(args.UseTemperatureModule) and not protocol.is_simulating():
         temp_mod = ColdPlateSlimDriver(protocol)
         temp_mod.quick_temp(float(args.Temperature))
         # print("Using Temperature Module: ", temp_mod.get_info())
@@ -356,7 +356,7 @@ def run(protocol: protocol_api.ProtocolContext):
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
 
     # If using Temperature Module, hold PCR plate at set temperature until user removes it and closes program.
-    if bool(args.UseTemperatureModule):
+    if bool(args.UseTemperatureModule) and not protocol.is_simulating():
         protocol.set_rail_lights(True)
         protocol.comment("Program is complete.  Temperature is holding at {}. Click RESUME to exit.".format(args.Temperature))
 
