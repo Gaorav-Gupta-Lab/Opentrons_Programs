@@ -966,7 +966,7 @@ class Utilities:
         #  p300_default_rate = 92.86
 
         if "P300 Single-Channel GEN2" in str(pipette):
-            r = 0.4
+            r = 0.2
             default_rate = p300_default_rate
             pipette.flow_rate.aspirate = 30
             pipette.flow_rate.dispense = 10
@@ -981,7 +981,7 @@ class Utilities:
             disposal_vol = 5
 
         pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells, touch_tip=True,
-                           radius=r, v_offset=-2, speed=20, blow_out=True, disposal_volume=disposal_vol,
+                           radius=r, v_offset=-2, speed=10, blow_out=True, disposal_volume=disposal_vol,
                            blowout_location='source well')
 
         pipette.flow_rate.aspirate = default_rate
