@@ -1,6 +1,5 @@
 import datetime
 import os
-# import sys
 import csv
 import platform
 import serial
@@ -15,7 +14,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.1.1',
+    'protocolName': 'PCR v3.1.2',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -298,7 +297,7 @@ def run(protocol: protocol_api.ProtocolContext):
     if bool(args.UseTemperatureModule):
         temp_mod = ColdPlateSlimDriver(protocol)
         temp_mod.quick_temp(float(args.Temperature))
-        print("Using Temperature Module: ", temp_mod.get_info())
+        # print("Using Temperature Module: ", temp_mod.get_info())
 
     target_info_dict = defaultdict(list)
 
@@ -357,15 +356,15 @@ def run(protocol: protocol_api.ProtocolContext):
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
 
     # If using Temperature Module, hold PCR plate at set temperature until user removes it and closes program.
-    if bool(args.UseTemperatureModule) and not protocol.is_simulating():
+    if bool(args.UseTemperatureModule):
         protocol.set_rail_lights(True)
-        print("Program is complete.  Temperature is holding at {}. Click RESUME to exit.".format(temp_mod.get_temp()))
+        protocol.comment("Program is complete.  Temperature is holding at {}. Click RESUME to exit.".format(args.Temperature))
 
         protocol.pause()
         temp_mod.deactivate()
         protocol.set_rail_lights(False)
     else:
-        print("Program Complete")
+        protocol.comment("Program Complete")
 
     if not protocol.is_simulating():
         os.remove(utility.parameter_file)
@@ -675,17 +674,18 @@ class ColdPlateSlimDriver:
         delay_min = self.time_to_reach_sample_temp(undershot_temp)
         delay_seconds = round((delay_min * 60), 1)
 
+        """
         if not self.protocol.is_simulating:
             print("Temp Module is {}C on its way to {}C.".format(self.get_temp(), temp_target, delay_seconds))
-
+        """
 
         if delay_min > 3:
             # Set temperature to rapidly cool or heat and delay program to allow temperature change.
             self.set_temperature(overshot_temp)
-
+            """
             print("Delaying program for {} seconds to allow Temp Module to reach {}C."
                                   .format(delay_seconds, temp_target))
-
+            """
             if not self.protocol.is_simulating():
                 time.sleep(delay_seconds)
 
@@ -973,7 +973,7 @@ class Utilities:
             pipette.flow_rate.aspirate = 30
             pipette.flow_rate.dispense = 10
             pipette.flow_rate.blow_out = 50
-            disposal_vol = 25
+            disposal_vol = 35
         elif "P20 Single-Channel GEN2" in str(pipette):
             touch = True
             r = 0.6
