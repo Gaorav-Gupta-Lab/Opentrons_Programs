@@ -966,22 +966,26 @@ class Utilities:
         #  p300_default_rate = 92.86
 
         if "P300 Single-Channel GEN2" in str(pipette):
-            r = 0.2
+            touch = False
+            r = 0.1
+            s = 5
             default_rate = p300_default_rate
             pipette.flow_rate.aspirate = 30
             pipette.flow_rate.dispense = 10
             pipette.flow_rate.blow_out = 50
             disposal_vol = 25
         elif "P20 Single-Channel GEN2" in str(pipette):
+            touch = True
             r = 0.6
+            s = 20
             default_rate = p20_default_rate
             pipette.flow_rate.aspirate = 6.5
             pipette.flow_rate.dispense = 5.0
             pipette.flow_rate.blow_out = 7.0
             disposal_vol = 5
 
-        pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells, touch_tip=True,
-                           radius=r, v_offset=-2, speed=10, blow_out=True, disposal_volume=disposal_vol,
+        pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells, touch_tip=touch,
+                           radius=r, v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
                            blowout_location='source well')
 
         pipette.flow_rate.aspirate = default_rate
