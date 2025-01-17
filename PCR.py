@@ -8,13 +8,12 @@ from types import SimpleNamespace
 from contextlib import suppress
 from collections import defaultdict
 from opentrons import protocol_api
-from opentrons.simulate import simulate, format_runlog
 import math
 # import Tool_Box
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.1.3',
+    'protocolName': 'PCR v3.2.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -110,47 +109,6 @@ def add_parameters(parameters: protocol_api.Parameters):
     )
     """
 
-
-def plate_layout(labware):
-    """
-    Define the destination layout for the reactions.  Can be 384-well, 96-well plate or 8-well strip tubes
-    @param labware:
-    @return:
-    """
-    column_count = 0
-    row_count = 0
-    if "384_" in labware:
-        column_count = 32
-        row_count = 12
-    elif "96_" or "8_well" or "ddpcr_plate" in labware:
-        column_count = 12
-        row_count = 8
-
-    layout_data = defaultdict(list)
-    plate_layout_by_column = []
-
-    # This is the index when using strip tubes.
-    column_index = [1, 3, 5, 7, 9, 11, 12]
-    row_labels = \
-        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
-         "U", "V", "W", "X", "Y", "Z"]
-
-    for c in range(column_count):
-
-        if "8_well" in labware:
-            # Strip tubes are in every other column.
-            c = column_index[c]
-        else:
-            # Humans don't do well with 0-based labels.
-            c += 1
-
-        for r in range(row_count):
-            layout_data[row_labels[r]] = [''] * column_count
-            plate_layout_by_column.append("{}{}".format(row_labels[r], c))
-
-    return plate_layout_by_column, layout_data
-
-
 def calculate_volumes(args, sample_concentration, template_in_rxn):
     """
     Calculates volumes for dilution and distribution of sample.
@@ -161,7 +119,6 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
     :param sample_concentration:
     :param template_in_rxn:
     :return:
-
     """
 
     max_template_vol = round(float(args.PCR_Volume)-float(args.MasterMixPerRxn), ndigits=1)
@@ -184,11 +141,11 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
             return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
 
 
-def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
+def sample_processing(args, sample_parameters, target_info_dict, utility):
     sample_data_dict = defaultdict(list)
     target_well_dict = defaultdict(list)
     water_well_dict = defaultdict(float)
-    plate_layout_by_column, layout_data = plate_layout(slot_dict[args.PCR_PlateSlot])
+    plate_layout_by_column, layout_data = utility.plate_layout(args.PCR_PlateSlot)
     used_wells = []
     dest_well_count = 0
     target_list = []
@@ -210,9 +167,9 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
 
         # sample_string = sample_name
         ucv = calculate_volumes(args, sample_concentration, template_in_rxn)
-        sample_vol = ucv[0]
-        diluent_vol = ucv[1]
-        diluted_sample_vol = ucv[2]
+        sample_vol = round(ucv[0], ndigits=1)
+        diluent_vol = round(ucv[1], ndigits=1)
+        diluted_sample_vol = round(ucv[2], ndigits=1)
         reaction_water_vol = ucv[3]
         max_template_vol = ucv[4]
 
@@ -230,8 +187,17 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
                 if diluent_vol == 0:
                     dilution = "Neat"
                     s_volume = sample_vol
+
                 else:
                     dilution = "1:{}".format(int((sample_vol + diluent_vol) / sample_vol))
+
+                    required_vol = round(
+                        (diluted_sample_vol * len(sample_targets) * replicates) + (3 * diluted_sample_vol), ndigits=1)
+                    dilution_factor = round(sample_vol / (sample_vol + diluent_vol), ndigits=4)
+                    final_sample_vol = round(dilution_factor * required_vol, ndigits=1)
+
+                    sample_vol = round(dilution_factor * required_vol, ndigits=1)
+                    diluent_vol = round(required_vol - final_sample_vol, ndigits=1)
 
                 layout_data[row][column] = "{}|{}|{}|{}"\
                     .format(sample_name, target_name, dilution, s_volume)
@@ -241,9 +207,8 @@ def sample_processing(args, sample_parameters, target_info_dict, slot_dict):
                 sample_wells.append(well)
                 used_wells.append(well)
                 dest_well_count += 1
-                
-        sample_data_dict[sample_key] = \
-            [round(sample_vol, ndigits=1), round(diluent_vol, ndigits=1), round(diluted_sample_vol, ndigits=1), sample_wells]
+
+        sample_data_dict[sample_key] = [sample_vol, diluent_vol, diluted_sample_vol, sample_wells]
 
     # Define our no template control wells for the targets.
     for target in target_well_dict:
@@ -293,7 +258,6 @@ def run(protocol: protocol_api.ProtocolContext):
     if not protocol.is_simulating():
         protocol.set_rail_lights(False)
 
-
     if bool(args.UseTemperatureModule) and not protocol.is_simulating():
         temp_mod = ColdPlateSlimDriver(protocol)
         temp_mod.quick_temp(float(args.Temperature))
@@ -313,7 +277,7 @@ def run(protocol: protocol_api.ProtocolContext):
             target_info_dict[i + 1] = target
 
     sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol = \
-        sample_processing(args, sample_parameters, target_info_dict, slot_dict)
+        sample_processing(args, sample_parameters, target_info_dict, utility)
 
     # This will output a plate layout file.  Only does it during the simulation from our GUI
     if protocol.is_simulating() and platform.system() == "Windows":
@@ -346,11 +310,9 @@ def run(protocol: protocol_api.ProtocolContext):
 
     # Now do the actual dispensing.
     water_aspirated = utility.dispense_water(water_well_dict, left_pipette, right_pipette)
-    # water_aspirated = dispense_water(args, labware, water_well_dict, left_pipette, right_pipette)
-
     utility.dispense_reagent_mix(labware, target_well_dict, target_info_dict, left_pipette, right_pipette)
 
-    water_aspirated = dispense_samples(args, labware, sample_data_dict, slot_dict, sample_parameters, left_pipette,
+    water_aspirated = dispense_samples(args, labware, sample_data_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated, utility)
     if "ddPCR" in args.Template:
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
@@ -406,12 +368,11 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
         fill_pipette.drop_tip()
 
 
-def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_parameters, left_pipette, right_pipette,
+def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette,
                      water_aspirated, utility):
     """
     Dilute and dispense samples
     @param utility:
-    @param slot_dict:
     @param args:
     @param labware_dict:
     @param sample_data_dict:
@@ -435,11 +396,13 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
     # If the user determines no dilutions are required they can leave that slot blank.  I don't like this approach,
     # users could leave the information out and dilutions might still be required.
     if dilution_labware:
-        labware_name = slot_dict[args.DilutionPlateSlot]
+        slot = args.DilutionPlateSlot
+        # labware_name = slot_dict[args.DilutionPlateSlot]
     else:
-        labware_name = slot_dict[args.PCR_PlateSlot]
+        slot = args.PCR_PlateSlot
+        # labware_name = slot_dict[args.PCR_PlateSlot]
 
-    dilution_plate_layout, unused_layout = plate_layout(labware_name)
+    dilution_plate_layout, unused_layout = utility.plate_layout(slot)
 
     dilution_well_index = 0
 
@@ -468,16 +431,14 @@ def dispense_samples(args, labware_dict, sample_data_dict, slot_dict, sample_par
             continue
 
         # Adjust volume of diluted sample to make sure there is enough
-        diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), ndigits=1)
-        diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), ndigits=1)
-        adjusted_sample_vol = round((sample_vol * diluted_template_factor), ndigits=1)
-        diluent_vol = round((diluent_vol*diluted_template_factor), ndigits=1)
+        # diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), ndigits=1)
+        # diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), ndigits=1)
+        # adjusted_sample_vol = round((sample_vol * diluted_template_factor), ndigits=1)
+        # diluent_vol = round((diluent_vol*diluted_template_factor), ndigits=1)
 
         # Reset the pipettes for the new volumes
-        diluent_pipette = \
-            utility.pipette_selection(left_pipette, right_pipette, diluent_vol)
-        sample_pipette = \
-            utility.pipette_selection(left_pipette, right_pipette, adjusted_sample_vol)
+        diluent_pipette = utility.pipette_selection(left_pipette, right_pipette, diluent_vol)
+        sample_pipette = utility.pipette_selection(left_pipette, right_pipette, sample_vol)
 
         # Make dilution, diluent first
         dilution_well = dilution_plate_layout[dilution_well_index]
@@ -802,7 +763,7 @@ class Utilities:
         """
 
         def tip_touch():
-            pipette.touch_tip(radius=0.65, v_offset=-5, speed=40)
+            pipette.touch_tip(radius=0.65, v_offset=-3, speed=1)
 
         if NewTip:
             if pipette.has_tip:
@@ -843,7 +804,6 @@ class Utilities:
         This works for both conical shapes and cylinders.
         @param res_vol:
         @param well_dia:
-        @param cone_vol:
         @return:
         """
         cone_vol = self.labware_cone_volume(self.args.ReagentSlot)
@@ -934,14 +894,17 @@ class Utilities:
             dispense_vol.append(round(float(water_well_dict[well]), 2))
             water_aspirated += water_well_dict[well]
 
+        if min(dispense_vol) <= 9:
+            volume = max(dispense_vol)
+        else:
+            volume = water_aspirated
+
+
         # Define the pipette for dispensing the water.
-        water_pipette = self.pipette_selection(left_pipette, right_pipette, water_aspirated)
+        water_pipette = self.pipette_selection(left_pipette, right_pipette, volume)
 
         # Use distribute command to dispense water.
-        self.distribute_reagents(water_pipette,
-                            reagent_labware[self.args.WaterResWell].bottom(z=float(self.args.BottomOffset)),
-                            destination_wells, dispense_vol
-                            )
+        self.distribute_reagents(water_pipette, destination_wells, dispense_vol)
 
         if left_pipette.has_tip:
             left_pipette.drop_tip()
@@ -950,12 +913,11 @@ class Utilities:
 
         return water_aspirated
 
-    @staticmethod
-    def distribute_reagents(pipette, source_well, destination_wells, dispense_vol):
+
+    def distribute_reagents(self, pipette, destination_wells, dispense_vol):
         """
         Dispense reagents using the distribute function.
         @param pipette:
-        @param source_well:
         @param destination_wells:
         @param dispense_vol:
         """
@@ -964,30 +926,71 @@ class Utilities:
         p20_default_rate = 7.50
         p300_default_rate = 75.0
         #  p300_default_rate = 92.86
+        p20 = False
+        source_well = self._labware_dict[self.args.ReagentSlot][self.args.WaterResWell]
 
         if "P300 Single-Channel GEN2" in str(pipette):
             touch = False
             r = 0.1
-            s = 5
+            s = 1
             default_rate = p300_default_rate
             pipette.flow_rate.aspirate = 30
             pipette.flow_rate.dispense = 10
             pipette.flow_rate.blow_out = 50
-            disposal_vol = 35
+            disposal_vol = 30
         elif "P20 Single-Channel GEN2" in str(pipette):
+            p20 = True
             touch = True
             r = 0.6
-            s = 20
+            s = 1
             default_rate = p20_default_rate
             pipette.flow_rate.aspirate = 6.5
             pipette.flow_rate.dispense = 5.0
             pipette.flow_rate.blow_out = 7.0
-            disposal_vol = 5
+            disposal_vol = 2
 
-        pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells, touch_tip=touch,
-                           radius=r, v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
-                           blowout_location='source well')
+        total_vol = 0
+        p20_vol = 0.0
+        p20_dispense_list = []
+        p20_destination_wells = []
+        water_res_vol = float(self.args.WaterResVol)
 
+        if p20:
+            print("P20 Single-Channel GEN2", dispense_vol)
+            i = 0
+            # Trying to keep the p20 tip from being submerged in the source well liquid
+            for volume, dest_well in zip(dispense_vol, destination_wells):
+                total_vol += volume
+                p20_vol += volume
+                p20_dispense_list.append(volume)
+                p20_destination_wells.append(dest_well)
+                i += 1
+
+                # For some reason this value is getting 1e-5 added to it occasionally.  Rounding corrects this.
+                p20_vol = round(p20_vol, 1)
+
+                # Need to keep the volume in the p20 < 18 uL while dynamically changing the tip height
+                if dispense_vol[i] + p20_vol >= 18:
+                    water_res_vol = round(water_res_vol, 1)
+                    height = self.res_tip_height(water_res_vol, source_well.diameter)
+
+                    pipette.distribute(volume=p20_dispense_list, source=source_well.bottom(height),
+                                       dest=p20_destination_wells, touch_tip=touch, radius=r,
+                                       v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
+                                       blowout_location='source well')
+                    water_res_vol -= p20_vol
+                    p20_vol = 0.0
+                    del p20_dispense_list[:i]
+                    del p20_destination_wells[:i]
+                    i = 0
+
+        else:
+            print("P300 Single-Channel GEN2", dispense_vol)
+            pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells, touch_tip=touch,
+                               radius=r, v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
+                               blowout_location='source well')
+
+        # Reset flow rates to default values
         pipette.flow_rate.aspirate = default_rate
         pipette.flow_rate.dispense = default_rate
         pipette.flow_rate.blow_out = default_rate
@@ -1012,6 +1015,47 @@ class Utilities:
                     self._left_tiprack_list.append(self._labware_dict[str(i + 1)])
                 elif labware in self.tipbox_dict[self.protocol.params.right_pipette]:
                     self._right_tiprack_list.append(self._labware_dict[str(i + 1)])
+
+    def plate_layout(self, slot):
+        """
+        Define the destination layout for the reactions.  Can be 384-well, 96-well plate or 8-well strip tubes
+        @return:
+        """
+
+        labware = self._slot_dict[slot]
+
+        column_count = 0
+        row_count = 0
+        if "384_" in labware:
+            column_count = 32
+            row_count = 12
+        elif "96_" or "8_well" or "ddpcr_plate" in labware:
+            column_count = 12
+            row_count = 8
+
+        layout_data = defaultdict(list)
+        plate_layout_by_column = []
+
+        # This is the index when using strip tubes.
+        column_index = [1, 3, 5, 7, 9, 11, 12]
+        row_labels = \
+            ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T",
+             "U", "V", "W", "X", "Y", "Z"]
+
+        for c in range(column_count):
+
+            if "8_well" in labware:
+                # Strip tubes are in every other column.
+                c = column_index[c]
+            else:
+                # Humans don't do well with 0-based labels.
+                c += 1
+
+            for r in range(row_count):
+                layout_data[row_labels[r]] = [''] * column_count
+                plate_layout_by_column.append("{}{}".format(row_labels[r], c))
+
+        return plate_layout_by_column, layout_data
 
     def parse_sample_template(self):
         """
@@ -1052,25 +1096,3 @@ class Utilities:
 
         self.args = SimpleNamespace(**options_dictionary)
         return self.sample_dictionary, self.args
-
-
-if __name__ == "__main__":
-    protocol_file = open('PCR.py')
-    labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
-    run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
-    run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
-    i = 1
-    t = format_runlog(run_log).split("\n")
-
-    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: PCR.py\n\nStep\tCommand\n" \
-        .format(metadata['protocolName'], run_date)
-
-    for l in t:
-        outstring += "{}\t{}\n".format(i, l)
-        i += 1
-    if platform.system() == "Windows":
-        outfile = open("C:{0}Users{0}{1}{0}Documents{0}ProgramFileSimulation.txt"
-                       .format(os.sep, os.getlogin()), 'w', encoding="UTF-16")
-        outfile.write(outstring)
-        outfile.close()
-    protocol_file.close()
