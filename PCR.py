@@ -13,7 +13,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.2.0',
+    'protocolName': 'PCR v3.2.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -939,8 +939,8 @@ class Utilities:
             pipette.flow_rate.blow_out = 50
             disposal_vol = 30
         elif "P20 Single-Channel GEN2" in str(pipette):
-            p20 = False
-            touch = True
+            p20 = True
+            touch = False
             r = 0.6
             s = 1
             default_rate = p20_default_rate
