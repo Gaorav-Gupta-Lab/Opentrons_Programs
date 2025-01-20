@@ -939,7 +939,7 @@ class Utilities:
             pipette.flow_rate.blow_out = 50
             disposal_vol = 30
         elif "P20 Single-Channel GEN2" in str(pipette):
-            p20 = True
+            p20 = False
             touch = True
             r = 0.6
             s = 1
