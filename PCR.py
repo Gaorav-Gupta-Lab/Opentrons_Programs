@@ -931,7 +931,7 @@ class Utilities:
         if "P300 Single-Channel GEN2" in str(pipette):
             touch = False
             r = 0.1
-            s = 1
+            s = 10
             default_rate = p300_default_rate
             pipette.flow_rate.aspirate = 30
             pipette.flow_rate.dispense = 10
@@ -941,7 +941,7 @@ class Utilities:
             p20 = True
             touch = False
             r = 0.70
-            s = 5
+            s = 25
             default_rate = p20_default_rate
             pipette.flow_rate.aspirate = 6.5
             pipette.flow_rate.dispense = 5.0
