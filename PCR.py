@@ -762,7 +762,7 @@ class Utilities:
         """
 
         def tip_touch():
-            pipette.touch_tip(radius=0.65, v_offset=-3, speed=1)
+            pipette.touch_tip(radius=0.65, v_offset=-3, speed=10)
 
         if NewTip:
             if pipette.has_tip:
