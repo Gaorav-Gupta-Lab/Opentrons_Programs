@@ -13,7 +13,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.2.2',
+    'protocolName': 'PCR v3.2.3',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -762,7 +762,7 @@ class Utilities:
         """
 
         def tip_touch():
-            pipette.touch_tip(radius=0.65, v_offset=-3, speed=10)
+            pipette.touch_tip(radius=0.75, v_offset=-2, speed=10)
 
         if NewTip:
             if pipette.has_tip:
