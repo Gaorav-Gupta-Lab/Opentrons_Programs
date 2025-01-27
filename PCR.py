@@ -13,7 +13,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.2.1',
+    'protocolName': 'PCR v3.2.2',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -579,9 +579,8 @@ class ColdPlateSlimDriver:
         @param my_temp:
         @return:
         """
-        if self.serial_object is None:
+        if self.serial_object is None and self.protocol.is_simulating():
             self.target_temp = my_temp
-
             return
 
         temp = float(my_temp) * 10
@@ -876,7 +875,7 @@ class Utilities:
         @param right_pipette:
         @return:
         """
-        reagent_labware = self._labware_dict[self.args.ReagentSlot]
+        # reagent_labware = self._labware_dict[self.args.ReagentSlot]
         sample_destination_labware = self._labware_dict[self.args.PCR_PlateSlot]
         '''
         bottom_offset = float(args.BottomOffset)
@@ -941,8 +940,8 @@ class Utilities:
         elif "P20 Single-Channel GEN2" in str(pipette):
             p20 = True
             touch = False
-            r = 0.6
-            s = 1
+            r = 0.70
+            s = 5
             default_rate = p20_default_rate
             pipette.flow_rate.aspirate = 6.5
             pipette.flow_rate.dispense = 5.0
@@ -975,7 +974,7 @@ class Utilities:
                     height = self.res_tip_height(water_res_vol, source_well.diameter)
 
                     pipette.distribute(volume=p20_dispense_list, source=source_well.bottom(height),
-                                       dest=p20_destination_wells, touch_tip=touch, radius=r,
+                                       dest=p20_destination_wells, drop_tip=False, touch_tip=touch, radius=r,
                                        v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
                                        blowout_location='source well')
                     water_res_vol -= p20_vol
