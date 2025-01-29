@@ -1,3 +1,13 @@
+"""
+This will set up a ddPCR or generic PCR using the Opentrons OT-2 robot.  Done in Gaorav Gupta's lab.
+Author: Dennis Simpson
+Address:    University of North Carolina at Chapel Hill
+            Lineberger Comprehensive Cancer Center
+            Chapel Hill, NC 27599
+email: dennis@email.unc.edu
+Copyright:  2025
+"""
+
 import datetime
 import os
 import csv
@@ -13,7 +23,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.2.3',
+    'protocolName': 'PCR v3.2.6',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -140,7 +150,6 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
 
             return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
 
-
 def sample_processing(args, sample_parameters, target_info_dict, utility):
     sample_data_dict = defaultdict(list)
     target_well_dict = defaultdict(list)
@@ -230,7 +239,6 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
         target_well_dict[target].append(well)
 
     return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
-
 
 def run(protocol: protocol_api.ProtocolContext):
     # Turn on rail lights.
@@ -762,7 +770,7 @@ class Utilities:
         """
 
         def tip_touch():
-            pipette.touch_tip(radius=0.75, v_offset=-2, speed=10)
+            pipette.touch_tip(radius=0.78, v_offset=-2, speed=10)
 
         if NewTip:
             if pipette.has_tip:
@@ -807,14 +815,13 @@ class Utilities:
         """
         cone_vol = self.labware_cone_volume(self.args.ReagentSlot)
         bottom_offset = float(self.args.BottomOffset)
-
+        cone_height = (3 * cone_vol / (math.pi * ((well_dia / 2) ** 2)))
         if res_vol > cone_vol:
-            cone_height = (3 * cone_vol / (math.pi * ((well_dia / 2) ** 2)))
             height = ((res_vol - cone_vol) / (math.pi * ((well_dia / 2) ** 2))) - 5 + cone_height
         else:
             height = (3 * res_vol / (math.pi * ((well_dia / 2) ** 2))) - 3
 
-        if height < 3:
+        if height < bottom_offset:
             height = bottom_offset
 
         return round(height, ndigits=1)
@@ -828,13 +835,10 @@ class Utilities:
         @return:
         """
         cone_vol = 200
-
-        # labware = getattr(args, "Slot{}".format(str(labware_name)[-1:]))
-        # labware = getattr(args, "Slot{}".format(str(labware_slot)))
         labware = getattr(self.args, "Slot{}".format(labware_slot), "")
 
-        if "e1.5ml" in labware:
-            cone_vol = 450
+        if "_1.5ml" in labware:
+            cone_vol = 415
 
         elif "e5ml" in labware:
             cone_vol = 1200
@@ -902,7 +906,7 @@ class Utilities:
         # Define the pipette for dispensing the water.
         water_pipette = self.pipette_selection(left_pipette, right_pipette, volume)
 
-        # Use distribute command to dispense water.
+        # Use custom distribute command to dispense water.
         self.distribute_reagents(water_pipette, destination_wells, dispense_vol)
 
         if left_pipette.has_tip:
@@ -929,8 +933,9 @@ class Utilities:
         source_well = self._labware_dict[self.args.ReagentSlot][self.args.WaterResWell]
 
         if "P300 Single-Channel GEN2" in str(pipette):
+            print("Distributing Water With P300 Single-Channel GEN2")
             touch = False
-            r = 0.1
+            r = 0.25
             s = 10
             default_rate = p300_default_rate
             pipette.flow_rate.aspirate = 30
@@ -938,15 +943,16 @@ class Utilities:
             pipette.flow_rate.blow_out = 50
             disposal_vol = 30
         elif "P20 Single-Channel GEN2" in str(pipette):
+            print("Distributing Water With P20 Single-Channel GEN2")
             p20 = True
             touch = False
-            r = 0.70
-            s = 25
+            r = 0.80
+            s = 10
             default_rate = p20_default_rate
             pipette.flow_rate.aspirate = 6.5
             pipette.flow_rate.dispense = 5.0
             pipette.flow_rate.blow_out = 7.0
-            disposal_vol = 2
+            disposal_vol = 2.0
 
         total_vol = 0
         p20_vol = 0.0
@@ -954,9 +960,12 @@ class Utilities:
         p20_destination_wells = []
         water_res_vol = float(self.args.WaterResVol)
 
+        if not pipette.has_tip:
+            pipette.pick_up_tip()
+
         if p20:
-            print("P20 Single-Channel GEN2", dispense_vol)
             i = 0
+
             # Trying to keep the p20 tip from being submerged in the source well liquid
             for volume, dest_well in zip(dispense_vol, destination_wells):
                 total_vol += volume
@@ -968,15 +977,26 @@ class Utilities:
                 # For some reason this value is getting 1e-5 added to it occasionally.  Rounding corrects this.
                 p20_vol = round(p20_vol, 1)
 
-                # Need to keep the volume in the p20 < 18 uL while dynamically changing the tip height
-                if dispense_vol[i] + p20_vol >= 18:
+                # Need to keep the volume in the p20 < 18 uL while dynamically changing the tip height.
+                #  My hack to get a dispense like function that will keep the same tip for the p20
+                if dispense_vol[i] + p20_vol + disposal_vol >= 18:
                     water_res_vol = round(water_res_vol, 1)
                     height = self.res_tip_height(water_res_vol, source_well.diameter)
+                    aspirated_vol =  p20_vol+disposal_vol
 
+                    pipette.aspirate(volume=aspirated_vol, location=source_well.bottom(height))
+
+                    for destination_well, dispensed_vol in zip(p20_destination_wells, p20_dispense_list):
+                        pipette.dispense(volume=dispensed_vol, location=destination_well)
+
+                    pipette.blow_out(source_well)
+
+                    """
                     pipette.distribute(volume=p20_dispense_list, source=source_well.bottom(height),
                                        dest=p20_destination_wells, drop_tip=False, touch_tip=touch, radius=r,
                                        v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
                                        blowout_location='source well')
+                    """
                     water_res_vol -= p20_vol
                     p20_vol = 0.0
                     del p20_dispense_list[:i]
