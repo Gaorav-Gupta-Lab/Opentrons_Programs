@@ -23,7 +23,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.2.6',
+    'protocolName': 'PCR v3.3.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -709,33 +709,15 @@ class Utilities:
             reagent_source_well = target_info_dict[int(target)][0]
             reagent_source_labware = labware_dict[reagent_slot]
             target_well_list = target_well_dict[target]
-
             reagent_aspirated = float(self.args.MasterMixPerRxn)
             reagent_well_vol = float(target_info_dict[int(target)][2])
             reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
 
             reagent_pipette = \
                 self.pipette_selection(left_pipette, right_pipette, float(self.args.MasterMixPerRxn))
-            '''
-            Distribute does not work with Multiplex master mixes.
-            # Use distribute command to dispense master mix.
-            destination_wells = []
-            for well in target_well_list:
-                destination_wells.append(sample_destination_labware[well])
+            self.protocol.comment("Dispensing {} target with {} pipette"
+                                  .format(target_info_dict[int(target)][1], reagent_pipette))
 
-            distribute_reagents(right_pipette,
-                                reagent_source_labware[reagent_source_well].bottom(z=bottom_offset),
-                                destination_wells,
-                                float(args.MasterMixPerRxn)
-                                )
-
-            # Drop any tips the pipettes might have.
-            if left_pipette.has_tip:
-                left_pipette.drop_tip()
-            if right_pipette.has_tip:
-                right_pipette.drop_tip()
-
-            '''
             for well in target_well_list:
                 reagent_tip_height = self.res_tip_height(reagent_well_vol - reagent_aspirated, reagent_well_dia)
 
@@ -745,7 +727,7 @@ class Utilities:
                                          NewTip=False, MixReaction=False, touch=True, MixVolume=None
                                          )
 
-                reagent_aspirated += reagent_aspirated
+                reagent_aspirated += float(self.args.MasterMixPerRxn)
 
             # Drop any tips the pipettes might have.
             if left_pipette.has_tip:
@@ -770,7 +752,7 @@ class Utilities:
         """
 
         def tip_touch():
-            pipette.touch_tip(radius=0.78, v_offset=-2, speed=10)
+            pipette.touch_tip(radius=0.79, v_offset=-2, speed=10)
 
         if NewTip:
             if pipette.has_tip:
@@ -902,10 +884,9 @@ class Utilities:
         else:
             volume = water_aspirated
 
-
         # Define the pipette for dispensing the water.
         water_pipette = self.pipette_selection(left_pipette, right_pipette, volume)
-
+        self.protocol.comment("Distributing water with {} pipette".format(water_pipette))
         # Use custom distribute command to dispense water.
         self.distribute_reagents(water_pipette, destination_wells, dispense_vol)
 
@@ -990,13 +971,6 @@ class Utilities:
                         pipette.dispense(volume=dispensed_vol, location=destination_well)
 
                     pipette.blow_out(source_well)
-
-                    """
-                    pipette.distribute(volume=p20_dispense_list, source=source_well.bottom(height),
-                                       dest=p20_destination_wells, drop_tip=False, touch_tip=touch, radius=r,
-                                       v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
-                                       blowout_location='source well')
-                    """
                     water_res_vol -= p20_vol
                     p20_vol = 0.0
                     del p20_dispense_list[:i]
