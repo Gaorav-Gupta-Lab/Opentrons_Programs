@@ -23,7 +23,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.3.0',
+    'protocolName': 'PCR v3.3.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -801,7 +801,7 @@ class Utilities:
         if res_vol > cone_vol:
             height = ((res_vol - cone_vol) / (math.pi * ((well_dia / 2) ** 2))) - 5 + cone_height
         else:
-            height = (3 * res_vol / (math.pi * ((well_dia / 2) ** 2))) - 3
+            height = (3 * res_vol / (math.pi * ((well_dia / 2) ** 2))) - 2
 
         if height < bottom_offset:
             height = bottom_offset
