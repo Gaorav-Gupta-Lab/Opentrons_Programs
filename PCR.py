@@ -23,7 +23,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.3.1',
+    'protocolName': 'PCR v3.3.2',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -960,7 +960,7 @@ class Utilities:
 
                 # Need to keep the volume in the p20 < 18 uL while dynamically changing the tip height.
                 #  My hack to get a dispense like function that will keep the same tip for the p20
-                if dispense_vol[i] + p20_vol + disposal_vol >= 18:
+                if i == len(dispense_vol) or dispense_vol[i] + p20_vol + disposal_vol >= 18.0:
                     water_res_vol = round(water_res_vol, 1)
                     height = self.res_tip_height(water_res_vol, source_well.diameter)
                     aspirated_vol =  p20_vol+disposal_vol
@@ -975,7 +975,7 @@ class Utilities:
                     p20_vol = 0.0
                     del p20_dispense_list[:i]
                     del p20_destination_wells[:i]
-                    i = 0
+                    # i = 0
 
         else:
             print("P300 Single-Channel GEN2", dispense_vol)
