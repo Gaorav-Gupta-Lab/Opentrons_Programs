@@ -23,7 +23,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.3.2',
+    'protocolName': 'PCR v3.3.3',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR or Generic PCR'
     }
@@ -770,9 +770,6 @@ class Utilities:
         if not MixReaction:
             pipette.blow_out()
 
-        if touch:
-            tip_touch()
-
         if MixReaction:
             v = float(self.args.PCR_Volume)
             if MixVolume:
@@ -780,6 +777,9 @@ class Utilities:
             vol = round(v * 0.65, ndigits=1)
             pipette.mix(repetitions=4, volume=vol, rate=2.0)
             pipette.blow_out()
+            tip_touch()
+
+        if touch:
             tip_touch()
 
         if NewTip:
