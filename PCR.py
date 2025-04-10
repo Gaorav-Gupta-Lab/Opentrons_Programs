@@ -24,7 +24,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.0.0',
+    'protocolName': 'PCR v4.0.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -284,7 +284,7 @@ def run(protocol: protocol_api.ProtocolContext):
     if not protocol.is_simulating():
         protocol.set_rail_lights(False)
 
-    if bool(args.UseTemperatureModule) and not protocol.is_simulating():
+    if args.UseTemperatureModule == True and not protocol.is_simulating():
         temp_mod = ColdPlateSlimDriver(protocol)
         temp_mod.quick_temp(float(args.Temperature))
         # print("Using Temperature Module: ", temp_mod.get_info())
