@@ -1,5 +1,6 @@
 """
-This will set up a ddPCR or generic PCR using the Opentrons OT-2 robot.  Done in Gaorav Gupta's lab.
+This will set up a ddPCR, generic PCR, or Illumina Dual Indexing PCR using the Opentrons OT-2 robot.
+Done in Gaorav Gupta's lab.
 Author: Dennis Simpson
 Address:    University of North Carolina at Chapel Hill
             Lineberger Comprehensive Cancer Center
@@ -23,19 +24,20 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v3.3.3',
+    'protocolName': 'PCR v4.0.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
-    'description': 'Setup a ddPCR or Generic PCR'
+    'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
 
 # requirements
 requirements = {"robotType": "OT-2", "apiLevel": "2.20"}
 
+
 def add_parameters(parameters: protocol_api.Parameters):
 
     """
     Parse the TSV file and fill in some parameter information.  This is duplicated from Utilities.  I don't know
-    another method to pass the information.
+    another method to pass the information when on the robot.
     @param parameters:
     """
     # TSV file location on OT-2
@@ -82,15 +84,18 @@ def add_parameters(parameters: protocol_api.Parameters):
 
     # We have limited space for the run_label.  To make sure the label is unique, I use a unix timestamp for the run_date.
     run_date = datetime.datetime.today().strftime("%f")
-    run_type = args.Template.split(" ")[1]
+    if "Illumina_Dual_Indexing" in args.Template:
+        run_type = "Dual_Indexing"
+    else:
+        run_type = args.Template.split(" ")[1]
 
     # This is used by the Opentrons app to make each run unique.
     parameters.add_str(
         variable_name="run_label",
-        display_name="Begin {} for {} {}".format(run_type, args.User, run_date),
+        display_name="{} {} {}".format(run_type, args.User, run_date),
         choices=[
-            {"display_name": "Run Label", "value": "Begin {} for {} {}".format(run_type, args.User, run_date)},],
-        default="Begin {} for {} {}".format(run_type, args.User, run_date),
+            {"display_name": "Run Label", "value": "{} {} {}".format(run_type, args.User, run_date)},],
+        default="{} {} {}".format(run_type, args.User, run_date),
     )
 
     parameters.add_str(
@@ -118,6 +123,7 @@ def add_parameters(parameters: protocol_api.Parameters):
         description="Looking to initialize Opentrons csv commands."
     )
     """
+
 
 def calculate_volumes(args, sample_concentration, template_in_rxn):
     """
@@ -150,6 +156,7 @@ def calculate_volumes(args, sample_concentration, template_in_rxn):
 
             return 1, dilution - 1, diluted_sample_vol, reaction_water_vol, max_template_vol
 
+
 def sample_processing(args, sample_parameters, target_info_dict, utility):
     sample_data_dict = defaultdict(list)
     target_well_dict = defaultdict(list)
@@ -160,19 +167,26 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
     target_list = []
 
     for sample_key in sample_parameters:
-        # sample_source_slot = sample_parameters[sample_key][0]
-        # sample_source_well = sample_parameters[sample_key][1]
         sample_name = sample_parameters[sample_key][2]
         sample_concentration = float(sample_parameters[sample_key][3])
-        sample_targets = sample_parameters[sample_key][4].split(",")
-        replicates = int(sample_parameters[sample_key][5])
 
-        if "ddPCR" in args.Template:
-            template_in_rxn = float(args.DNA_in_Reaction)
-        elif "Generic PCR" in args.Template:
+        if "Illumina Dual Indexing" in args.Template:
+            # Extract indices.  Always going to be two values.
+            sample_targets = sample_parameters[sample_key][4].split("+")
+        else:
+            sample_targets = sample_parameters[sample_key][4].split(",")
+
+        # Illumina Dual Indexing never has replicates or an index 5.
+        try:
+            replicates = int(sample_parameters[sample_key][5])
+        except IndexError:
+            replicates = 1
+
+        # Generic PCR allows different amounts of DNA in each reaction.
+        if "Generic PCR" in args.Template:
             template_in_rxn = float(sample_parameters[sample_key][6])
         else:
-            raise SystemExit("There is an error in the Template name.")
+            template_in_rxn = float(args.DNA_in_Reaction)
 
         # sample_string = sample_name
         ucv = calculate_volumes(args, sample_concentration, template_in_rxn)
@@ -185,7 +199,10 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
         sample_wells = []
         for target in sample_targets:
             target_list.append(target)
-            target_name = target_info_dict[int(target)][1]
+            if "Illumina_Dual_Indexing" in args.Template:
+                target_name = target
+            else:
+                target_name = target_info_dict[int(target)][1]
 
             for i in range(replicates):
                 well = plate_layout_by_column[dest_well_count]
@@ -196,7 +213,6 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
                 if diluent_vol == 0:
                     dilution = "Neat"
                     s_volume = sample_vol
-
                 else:
                     dilution = "1:{}".format(int((sample_vol + diluent_vol) / sample_vol))
 
@@ -225,29 +241,31 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
 
     target_list = list(set(target_list))
 
-    for target in target_list:
-        control_name = "Water"
-        target_name = target_info_dict[int(target)][1]
-        well = plate_layout_by_column[dest_well_count]
-        used_wells.append(well)
-        row = well[0]
-        column = int(well[1:])-1
-        layout_data[row][column] = "{}|{}|NA|{}".format(control_name, target_name, max_template_vol)
-        water_well_dict[well] = max_template_vol
-        dest_well_count += 1
+    # There is never a no template control for the Illumina Dual Indexing PCR.
+    if "Illumina_Dual_Indexing" not in args.Template:
+        for target in target_list:
+            control_name = "Water"
+            target_name = target_info_dict[int(target)][1]
+            well = plate_layout_by_column[dest_well_count]
+            used_wells.append(well)
+            row = well[0]
+            column = int(well[1:])-1
+            layout_data[row][column] = "{}|{}|NA|{}".format(control_name, target_name, max_template_vol)
+            water_well_dict[well] = max_template_vol
+            dest_well_count += 1
 
-        target_well_dict[target].append(well)
+            target_well_dict[target].append(well)
 
     return sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol
 
+
 def run(protocol: protocol_api.ProtocolContext):
-    # Turn on rail lights.
+    protocol.comment(protocol.params.run_label)
     protocol.set_rail_lights(True)
 
     utility = Utilities(protocol)
     sample_parameters, args = utility.parse_sample_template()
     utility.labware_parsing()
-    protocol.comment(protocol.params.run_label)
 
     left_tipracks, right_tipracks = utility.tipracks
     labware, slot_dict = utility.deck_layout
@@ -273,16 +291,17 @@ def run(protocol: protocol_api.ProtocolContext):
 
     target_info_dict = defaultdict(list)
 
-    # Read targeting parameters into dictionary
-    for i in range(10):
-        target = getattr(args, "Target_{}".format(i + 1))
+    # Read targeting parameters into dictionary if not running an Indexing PCR.
+    if "Illumina_Dual_Indexing" not in args.Template:
+        for i in range(10):
+            target = getattr(args, "Target_{}".format(i + 1))
 
-        if len(target[0]) > 1:
-            """
-            if not all('' == s or s.isspace() for s in target):
+            if len(target[0]) > 1:
+                """
+                if not all('' == s or s.isspace() for s in target):
+                    target_info_dict[i + 1] = target
+                """
                 target_info_dict[i + 1] = target
-            """
-            target_info_dict[i + 1] = target
 
     sample_data_dict, water_well_dict, target_well_dict, used_wells, layout_data, max_template_vol = \
         sample_processing(args, sample_parameters, target_info_dict, utility)
@@ -320,6 +339,9 @@ def run(protocol: protocol_api.ProtocolContext):
     water_aspirated = utility.dispense_water(water_well_dict, left_pipette, right_pipette)
     utility.dispense_reagent_mix(labware, target_well_dict, target_info_dict, left_pipette, right_pipette)
 
+    if "Illumina_Dual_Indexing" in args.Template:
+        dispense_indexing_primers(args, utility, left_pipette, right_pipette, labware, sample_parameters)
+
     water_aspirated = dispense_samples(args, labware, sample_data_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated, utility)
     if "ddPCR" in args.Template:
@@ -340,11 +362,51 @@ def run(protocol: protocol_api.ProtocolContext):
         os.remove(utility.parameter_file)
 
 
+def dispense_indexing_primers(args, utility, left_pipette, right_pipette, labware, sample_parameters):
+    # Extract Index Primer information
+    index_primers = \
+        ["D501", "D502", "D503", "D504", "D505", "D506", "D507", "D508", "D701", "D702", "D703", "D704", "D705",
+         "D706", "D707", "D708", "D709", "D710a", "D711", "D712"]
+
+    primer_wells = {}
+
+    # Build a dictionary of the index primer wells
+    for i in range(len(index_primers)):
+        # primer_well = getattr(args, "{}".format(index_primers[i]))
+        primer_wells[index_primers[i]] = getattr(args, "{}".format(index_primers[i]))
+
+    # Determine primer volumes and dispense them.
+    # 6.25 uM = 2 uL per 50 uL
+    # 10 uM = 1.25 uL per 50 uL
+    # primer_volume = (float(args.PCR_Volume)/50) * 1.25
+    primer_volume = (float(args.PCR_Volume) / 50) * 2.0
+    selected_pipette = utility.pipette_selection(left_pipette, right_pipette, primer_volume)
+
+    # Step 3: Identify labware for primers and sample destinations
+    primer_labware = labware[args.IndexPrimerSlot]
+    sample_destination_labware = labware[args.PCR_PlateSlot]
+
+    for sample_key in sample_parameters:
+        sample_data = sample_parameters[sample_key]
+        sample_well = sample_data[1]
+        d500, d700 = sample_data[4].split("+")
+
+        # Dispense D500 primer
+        utility.pipette_reagents(selected_pipette, primer_labware[primer_wells[d500]].bottom(float(args.BottomOffset)),
+                                 sample_destination_labware[sample_well], primer_volume, NewTip=True, MixReaction=False,
+                                 touch=True)
+
+        # Dispense D700 primer
+        utility.pipette_reagents(selected_pipette, primer_labware[primer_wells[d700]].bottom(float(args.BottomOffset)),
+                                 sample_destination_labware[sample_well], primer_volume, NewTip=True, MixReaction=False,
+                                 touch=True)
+
+
 def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette, utility):
     """
     This will fill the remaining wells in a column with water.  Needed to for the droplet generator.
     """
-    bottom_offset = float(args.BottomOffset)
+
     last_used_well = used_wells[-1]
     row = last_used_well[0]
     column = int(last_used_well.split(row)[1])
@@ -706,17 +768,24 @@ class Utilities:
         # Dispense reagents into all wells
         for target in target_well_dict:
             reagent_slot = self.args.ReagentSlot
-            reagent_source_well = target_info_dict[int(target)][0]
+            if "Illumina_Dual_Indexing" in self.args.Template:
+                reagent_source_well = self.args.PCR_ReagentWell
+                reagent_well_vol = float(self.args.TotalReagentVolume)
+            else:
+                reagent_source_well = target_info_dict[int(target)][0]
+                reagent_well_vol = float(target_info_dict[int(target)][2])
+
             reagent_source_labware = labware_dict[reagent_slot]
             target_well_list = target_well_dict[target]
             reagent_aspirated = float(self.args.MasterMixPerRxn)
-            reagent_well_vol = float(target_info_dict[int(target)][2])
             reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
 
             reagent_pipette = \
                 self.pipette_selection(left_pipette, right_pipette, float(self.args.MasterMixPerRxn))
-            self.protocol.comment("Dispensing {} target with {} pipette"
-                                  .format(target_info_dict[int(target)][1], reagent_pipette))
+
+            if "Illumina_Dual_Indexing" not in self.args.Template:
+                self.protocol.comment("Dispensing {} target with {} pipette"
+                                      .format(target_info_dict[int(target)][1], reagent_pipette))
 
             for well in target_well_list:
                 reagent_tip_height = self.res_tip_height(reagent_well_vol - reagent_aspirated, reagent_well_dia)
@@ -874,11 +943,14 @@ class Utilities:
         destination_wells = []
         dispense_vol = []
         water_aspirated = 0
+
         for well in water_well_dict:
             destination_wells.append(sample_destination_labware[well])
+            # destination_wells.append(well)
             dispense_vol.append(round(float(water_well_dict[well]), 2))
             water_aspirated += water_well_dict[well]
 
+        water_aspirated = round(water_aspirated, 2)
         if min(dispense_vol) <= 9:
             volume = max(dispense_vol)
         else:
@@ -900,7 +972,7 @@ class Utilities:
 
     def distribute_reagents(self, pipette, destination_wells, dispense_vol):
         """
-        Dispense reagents using the distribute function.
+        Dispense reagents using a custom distribute function.
         @param pipette:
         @param destination_wells:
         @param dispense_vol:
@@ -910,25 +982,51 @@ class Utilities:
         p20_default_rate = 7.50
         p300_default_rate = 75.0
         #  p300_default_rate = 92.86
-        p20 = False
+        # p20 = False
         source_well = self._labware_dict[self.args.ReagentSlot][self.args.WaterResWell]
+
+        p20_tips = False
+        p200_tips = False
+        p300_tips = False
+        if "p300_single_gen2" in self.protocol.params.left_pipette and "P300 Single-Channel GEN2" in str(pipette):
+            if any("300" in str(s) for s in self._left_tiprack_list):
+                p300_tips = True
+            elif any("200" in str(s) for s in self._left_tiprack_list):
+                p200_tips = True
+        elif "p20_single_gen2" in self.protocol.params.left_pipette and "P20 Single-Channel GEN2" in str(pipette):
+            p20_tips = True
+        elif "p300_single_gen2" in self.protocol.params.right_pipette and "P300 Single-Channel GEN2" in str(pipette):
+            if any("300" in str(s) for s in self._left_tiprack_list):
+                p300_tips = True
+            elif any("200" in str(s) for s in self._left_tiprack_list):
+                p200_tips = True
+        elif "p20_single_gen2" in self.protocol.params.right_pipette and "P20 Single-Channel GEN2" in str(pipette):
+            p20_tips = True
+
+        if p20_tips:
+            max_tip_vol = 19.0
+        elif p200_tips:
+            max_tip_vol = 195.0
+        elif p300_tips:
+            max_tip_vol = 295.0
 
         if "P300 Single-Channel GEN2" in str(pipette):
             print("Distributing Water With P300 Single-Channel GEN2")
-            touch = False
-            r = 0.25
-            s = 10
+            # touch = False
+            # r = 0.25
+            # s = 10
             default_rate = p300_default_rate
             pipette.flow_rate.aspirate = 30
             pipette.flow_rate.dispense = 10
             pipette.flow_rate.blow_out = 50
             disposal_vol = 30
+
         elif "P20 Single-Channel GEN2" in str(pipette):
             print("Distributing Water With P20 Single-Channel GEN2")
-            p20 = True
-            touch = False
-            r = 0.80
-            s = 10
+            # p20 = True
+            # touch = False
+            # r = 0.80
+            # s = 10
             default_rate = p20_default_rate
             pipette.flow_rate.aspirate = 6.5
             pipette.flow_rate.dispense = 5.0
@@ -936,52 +1034,48 @@ class Utilities:
             disposal_vol = 2.0
 
         total_vol = 0
-        p20_vol = 0.0
-        p20_dispense_list = []
-        p20_destination_wells = []
+        # p20_vol = 0.0
+        # p20_dispense_list = []
+        # p20_destination_wells = []
         water_res_vol = float(self.args.WaterResVol)
+
+        tip_vol = 0.0
+        dispense_list = []
+        well_distribution = []
 
         if not pipette.has_tip:
             pipette.pick_up_tip()
 
-        if p20:
-            i = 0
+        i = 0
 
-            # Trying to keep the p20 tip from being submerged in the source well liquid
-            for volume, dest_well in zip(dispense_vol, destination_wells):
-                total_vol += volume
-                p20_vol += volume
-                p20_dispense_list.append(volume)
-                p20_destination_wells.append(dest_well)
-                i += 1
+        # Trying to keep the tip from being submerged in the source well liquid
+        for volume, dest_well in zip(dispense_vol, destination_wells):
+            total_vol += volume
+            tip_vol += volume
+            dispense_list.append(volume)
+            well_distribution.append(dest_well)
+            i += 1
 
-                # For some reason this value is getting 1e-5 added to it occasionally.  Rounding corrects this.
-                p20_vol = round(p20_vol, 1)
+            # For some reason this value is getting 1e-5 added to it occasionally.  Rounding corrects this.
+            tip_vol = round(tip_vol, 1)
 
-                # Need to keep the volume in the p20 < 18 uL while dynamically changing the tip height.
-                #  My hack to get a dispense like function that will keep the same tip for the p20
-                if i == len(dispense_vol) or dispense_vol[i] + p20_vol + disposal_vol >= 18.0:
-                    water_res_vol = round(water_res_vol, 1)
-                    height = self.res_tip_height(water_res_vol, source_well.diameter)
-                    aspirated_vol =  p20_vol+disposal_vol
+            # Need to keep the volume in the tips below their max vol while dynamically changing the tip height.
+            #  My hack to get a dispense like function that will keep the same tip
+            if i == len(dispense_vol) or dispense_vol[i] + tip_vol + disposal_vol >= max_tip_vol:
+                water_res_vol = round(water_res_vol, 1)
+                height = self.res_tip_height(water_res_vol, source_well.diameter)
+                aspirated_vol = tip_vol + disposal_vol
 
-                    pipette.aspirate(volume=aspirated_vol, location=source_well.bottom(height))
+                pipette.aspirate(volume=aspirated_vol, location=source_well.bottom(height))
 
-                    for destination_well, dispensed_vol in zip(p20_destination_wells, p20_dispense_list):
-                        pipette.dispense(volume=dispensed_vol, location=destination_well)
+                for destination_well, dispensed_vol in zip(well_distribution, dispense_list):
+                    pipette.dispense(volume=dispensed_vol, location=destination_well)
 
-                    pipette.blow_out(source_well)
-                    water_res_vol -= p20_vol
-                    p20_vol = 0.0
-                    del p20_dispense_list[:i]
-                    del p20_destination_wells[:i]
-                    # i = 0
-
-        else:
-            print("P300 Single-Channel GEN2", dispense_vol)
-            pipette.distribute(volume=dispense_vol, source=source_well, dest=destination_wells, touch_tip=touch,
-                               radius=r, v_offset=-2, speed=s, blow_out=True, disposal_volume=disposal_vol,
-                               blowout_location='source well')
+                pipette.blow_out(source_well)
+                water_res_vol -= tip_vol
+                tip_vol = 0.0
+                del dispense_list[:i]
+                del well_distribution[:i]
 
         # Reset flow rates to default values
         pipette.flow_rate.aspirate = default_rate

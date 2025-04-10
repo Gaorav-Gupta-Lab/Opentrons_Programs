@@ -10,18 +10,22 @@ from opentrons.simulate import simulate, format_runlog
 metadata = {
     'protocolName': 'Simulate_PCR v1.0.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
-    'description': 'Setup a ddPCR or Generic PCR'
+    'description': 'Run Simulation for PCR.py',
     }
 
 if __name__ == "__main__":
     protocol_file = open('PCR.py')
+    # protocol_file = open('Illumina_Dual_Indexing.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
     run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
     i = 1
     t = format_runlog(run_log).split("\n")
 
-    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: PCR.py\n\nStep\tCommand\n" \
+    #outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: PCR.py\n\nStep\tCommand\n" \
+    #    .format(metadata['protocolName'], run_date)
+
+    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: Illumina_Dual_Indexing.py\n\nStep\tCommand\n" \
         .format(metadata['protocolName'], run_date)
 
     for l in t:
