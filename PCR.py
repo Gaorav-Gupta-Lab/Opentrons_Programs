@@ -348,7 +348,7 @@ def run(protocol: protocol_api.ProtocolContext):
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
 
     # If using Temperature Module, hold PCR plate at set temperature until user removes it and closes program.
-    if bool(args.UseTemperatureModule) and not protocol.is_simulating():
+    if args.UseTemperatureModule != "FALSE" and not protocol.is_simulating():
         protocol.set_rail_lights(True)
         protocol.comment("Program is complete.  Temperature is holding at {}. Click RESUME to exit.".format(args.Temperature))
 
@@ -775,8 +775,9 @@ class Utilities:
                 reagent_source_well = target_info_dict[int(target)][0]
                 reagent_well_vol = float(target_info_dict[int(target)][2])
 
-            reagent_source_labware = labware_dict[reagent_slot]
             target_well_list = target_well_dict[target]
+            reagent_source_labware = labware_dict[reagent_slot]
+
             reagent_aspirated = float(self.args.MasterMixPerRxn)
             reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
 
@@ -784,8 +785,10 @@ class Utilities:
                 self.pipette_selection(left_pipette, right_pipette, float(self.args.MasterMixPerRxn))
 
             if "Illumina_Dual_Indexing" not in self.args.Template:
-                self.protocol.comment("Dispensing {} target with {} pipette"
+                self.protocol.comment("Dispensing {} target with {}"
                                       .format(target_info_dict[int(target)][1], reagent_pipette))
+            else:
+                self.protocol.comment("Dispensing Master Mix with {}".format(reagent_pipette))
 
             for well in target_well_list:
                 reagent_tip_height = self.res_tip_height(reagent_well_vol - reagent_aspirated, reagent_well_dia)
@@ -799,11 +802,18 @@ class Utilities:
                 reagent_aspirated += float(self.args.MasterMixPerRxn)
 
             # Drop any tips the pipettes might have.
-            if left_pipette.has_tip:
-                left_pipette.drop_tip()
-            if right_pipette.has_tip:
-                right_pipette.drop_tip()
+            if "Illumina_Dual_Indexing" not in self.args.Template:
+                self.drop_any_tips()
+        self.drop_any_tips()
 
+    def drop_any_tips(self):
+        pipettes = [self.left_pipette, self.right_pipette]
+        for pipette in pipettes:
+            try:
+                if pipette.has_tip:
+                    pipette.drop_tip()
+            except AttributeError:
+                pass
 
     def pipette_reagents(self, pipette, source_location, destination_location, volume, NewTip, MixReaction,
                          touch=False, MixVolume=None):
@@ -961,14 +971,9 @@ class Utilities:
         self.protocol.comment("Distributing water with {} pipette".format(water_pipette))
         # Use custom distribute command to dispense water.
         self.distribute_reagents(water_pipette, destination_wells, dispense_vol)
-
-        if left_pipette.has_tip:
-            left_pipette.drop_tip()
-        if right_pipette.has_tip:
-            right_pipette.drop_tip()
+        self.drop_any_tips()
 
         return water_aspirated
-
 
     def distribute_reagents(self, pipette, destination_wells, dispense_vol):
         """
