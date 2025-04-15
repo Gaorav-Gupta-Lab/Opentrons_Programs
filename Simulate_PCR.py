@@ -12,6 +12,7 @@ metadata = {
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Run Simulation for PCR.py',
     }
+requirements = {"robotType": "OT-2", "apiLevel": "2.20"}
 
 if __name__ == "__main__":
     protocol_file = open('PCR.py')

@@ -24,7 +24,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.0.1',
+    'protocolName': 'PCR v4.1.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -170,17 +170,14 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
         sample_name = sample_parameters[sample_key][2]
         sample_concentration = float(sample_parameters[sample_key][3])
 
-        if "Illumina Dual Indexing" in args.Template:
+        if "Illumina_Dual_Indexing" in args.Template:
             # Extract indices.  Always going to be two values.
-            sample_targets = sample_parameters[sample_key][4].split("+")
+            # sample_targets = sample_parameters[sample_key][4].split("+")
+            sample_targets = [sample_parameters[sample_key][4]]
+            replicates = 1
         else:
             sample_targets = sample_parameters[sample_key][4].split(",")
-
-        # Illumina Dual Indexing never has replicates or an index 5.
-        try:
             replicates = int(sample_parameters[sample_key][5])
-        except IndexError:
-            replicates = 1
 
         # Generic PCR allows different amounts of DNA in each reaction.
         if "Generic PCR" in args.Template:
@@ -206,7 +203,10 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
 
             for i in range(replicates):
                 well = plate_layout_by_column[dest_well_count]
-                row = well[0]
+                try:
+                    row = well[0]
+                except IndexError:
+                    row = well
                 column = int(well[1:])-1
                 s_volume = diluted_sample_vol
 
@@ -340,10 +340,11 @@ def run(protocol: protocol_api.ProtocolContext):
     utility.dispense_reagent_mix(labware, target_well_dict, target_info_dict, left_pipette, right_pipette)
 
     if "Illumina_Dual_Indexing" in args.Template:
-        dispense_indexing_primers(args, utility, left_pipette, right_pipette, labware, sample_parameters)
+        dispense_indexing_primers(args, protocol, utility, left_pipette, right_pipette, labware, sample_parameters,
+                                  sample_data_dict)
 
     water_aspirated = dispense_samples(args, labware, sample_data_dict, sample_parameters, left_pipette,
-                                       right_pipette, water_aspirated, utility)
+                                       right_pipette, water_aspirated, utility, protocol)
     if "ddPCR" in args.Template:
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
 
@@ -362,7 +363,10 @@ def run(protocol: protocol_api.ProtocolContext):
         os.remove(utility.parameter_file)
 
 
-def dispense_indexing_primers(args, utility, left_pipette, right_pipette, labware, sample_parameters):
+def dispense_indexing_primers(args, protocol, utility, left_pipette, right_pipette, labware, sample_parameters,
+                              sample_data_dict):
+    protocol.comment("\nDispensing Indexing Primers")
+
     # Extract Index Primer information
     index_primers = \
         ["D501", "D502", "D503", "D504", "D505", "D506", "D507", "D508", "D701", "D702", "D703", "D704", "D705",
@@ -387,18 +391,19 @@ def dispense_indexing_primers(args, utility, left_pipette, right_pipette, labwar
     sample_destination_labware = labware[args.PCR_PlateSlot]
 
     for sample_key in sample_parameters:
+        destination_well = sample_data_dict[sample_key][3][0]
         sample_data = sample_parameters[sample_key]
         sample_well = sample_data[1]
         d500, d700 = sample_data[4].split("+")
 
         # Dispense D500 primer
         utility.pipette_reagents(selected_pipette, primer_labware[primer_wells[d500]].bottom(float(args.BottomOffset)),
-                                 sample_destination_labware[sample_well], primer_volume, NewTip=True, MixReaction=False,
+                                 sample_destination_labware[destination_well], primer_volume, NewTip=True, MixReaction=False,
                                  touch=True)
 
         # Dispense D700 primer
         utility.pipette_reagents(selected_pipette, primer_labware[primer_wells[d700]].bottom(float(args.BottomOffset)),
-                                 sample_destination_labware[sample_well], primer_volume, NewTip=True, MixReaction=False,
+                                 sample_destination_labware[destination_well], primer_volume, NewTip=True, MixReaction=False,
                                  touch=True)
 
 
@@ -439,7 +444,7 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
 
 
 def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, left_pipette, right_pipette,
-                     water_aspirated, utility):
+                     water_aspirated, utility, protocol):
     """
     Dilute and dispense samples
     @param utility:
@@ -451,7 +456,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
     @param right_pipette:
     @param water_aspirated:
     """
-
+    protocol.comment("\nDiluting and Dispensing Samples")
     try:
         dilution_labware = labware_dict[args.DilutionPlateSlot]
     except KeyError:
@@ -490,6 +495,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
 
         # If no dilution is necessary, dispense sample and continue
         if diluted_sample_vol == 0:
+
             sample_pipette = \
                 utility.pipette_selection(left_pipette, right_pipette, sample_vol)
 
@@ -498,56 +504,63 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
                                          sample_destination_labware[well], sample_vol,
                                          NewTip=True, MixReaction=True, touch=True, MixVolume=mix_volume
                                          )
-            continue
+        else:
+            water_aspirated, dilution_well_index = sample_dilution(args, sample_source_labware, sample_source_well, sample_vol, diluent_vol,
+                                              dilution_plate_layout, dilution_well_index, reagent_labware,
+                                              water_tip_height, dilution_labware, diluted_sample_vol, water_res_well_dia,
+                                              sample_dest_wells, sample_destination_labware, bottom_offset, left_pipette,
+                                              right_pipette, water_aspirated, utility)
 
-        # Adjust volume of diluted sample to make sure there is enough
-        # diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), ndigits=1)
-        # diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), ndigits=1)
-        # adjusted_sample_vol = round((sample_vol * diluted_template_factor), ndigits=1)
-        # diluent_vol = round((diluent_vol*diluted_template_factor), ndigits=1)
+    utility.drop_any_tips()
+    return water_aspirated
 
-        # Reset the pipettes for the new volumes
-        diluent_pipette = utility.pipette_selection(left_pipette, right_pipette, diluent_vol)
-        sample_pipette = utility.pipette_selection(left_pipette, right_pipette, sample_vol)
+def sample_dilution(args, sample_source_labware, sample_source_well, sample_vol, diluent_vol, dilution_plate_layout,
+                    dilution_well_index, reagent_labware, water_tip_height, dilution_labware, diluted_sample_vol,
+                    water_res_well_dia, sample_dest_wells, sample_destination_labware, bottom_offset, left_pipette, right_pipette,
+                    water_aspirated, utility):
+    # Adjust volume of diluted sample to make sure there is enough
+    # diluted_template_needed = round(diluted_sample_vol*(len(sample_dest_wells)+1.5), ndigits=1)
+    # diluted_template_factor = round(diluted_template_needed/(sample_vol+diluent_vol), ndigits=1)
+    # adjusted_sample_vol = round((sample_vol * diluted_template_factor), ndigits=1)
+    # diluent_vol = round((diluent_vol*diluted_template_factor), ndigits=1)
 
-        # Make dilution, diluent first
-        dilution_well = dilution_plate_layout[dilution_well_index]
+    # Reset the pipettes for the new volumes
+    diluent_pipette = utility.pipette_selection(left_pipette, right_pipette, diluent_vol)
+    sample_pipette = utility.pipette_selection(left_pipette, right_pipette, sample_vol)
 
-        utility.pipette_reagents(diluent_pipette, reagent_labware[args.WaterResWell].bottom(water_tip_height),
-                         dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=False,
-                         touch=True)
+    # Make dilution, diluent first
+    dilution_well = dilution_plate_layout[dilution_well_index]
+
+    utility.pipette_reagents(diluent_pipette, reagent_labware[args.WaterResWell].bottom(water_tip_height),
+                             dilution_labware[dilution_well], diluent_vol, NewTip=True, MixReaction=False,
+                             touch=True)
+    mix_volume = None
+    if diluted_sample_vol < 20:
+        mix_volume = 18
+
+    utility.pipette_reagents(sample_pipette, sample_source_labware[sample_source_well],
+                             dilution_labware[dilution_well], sample_vol, NewTip=True, MixReaction=True,
+                             MixVolume=mix_volume)
+
+    water_aspirated += diluent_vol
+    dilution_well_index += 1
+    water_tip_height = \
+        utility.res_tip_height(float(args.WaterResVol) - water_aspirated, water_res_well_dia)
+
+    # Add diluted sample to PCR plate
+    for well in sample_dest_wells:
+        sample_pipette = \
+            utility.pipette_selection(left_pipette, right_pipette, diluted_sample_vol)
         mix_volume = None
+
         if diluted_sample_vol < 20:
             mix_volume = 18
 
-        utility.pipette_reagents(sample_pipette, sample_source_labware[sample_source_well],
-                         dilution_labware[dilution_well], sample_vol, NewTip=True, MixReaction=True,
-                         MixVolume=mix_volume)
-
-        water_aspirated += diluent_vol
-        dilution_well_index += 1
-        water_tip_height = \
-            utility.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia)
-
-        # Add diluted sample to PCR plate
-        for well in sample_dest_wells:
-            sample_pipette = \
-                utility.pipette_selection(left_pipette, right_pipette, diluted_sample_vol)
-            mix_volume = None
-
-            if diluted_sample_vol < 20:
-                mix_volume = 18
-
-            utility.pipette_reagents(sample_pipette, dilution_labware[dilution_well].bottom(bottom_offset),
-                                     sample_destination_labware[well], diluted_sample_vol, NewTip=True,
-                                     MixReaction=True, MixVolume=mix_volume
-                                     )
-
-        if sample_pipette.has_tip:
-            sample_pipette.drop_tip()
-
-    return water_aspirated
-
+        utility.pipette_reagents(sample_pipette, dilution_labware[dilution_well].bottom(bottom_offset),
+                                 sample_destination_labware[well], diluted_sample_vol, NewTip=True,
+                                 MixReaction=True, MixVolume=mix_volume
+                                 )
+    return water_aspirated, dilution_well_index
 
 class ColdPlateSlimDriver:
     """
@@ -785,10 +798,10 @@ class Utilities:
                 self.pipette_selection(left_pipette, right_pipette, float(self.args.MasterMixPerRxn))
 
             if "Illumina_Dual_Indexing" not in self.args.Template:
-                self.protocol.comment("Dispensing {} target with {}"
+                self.protocol.comment("\nDispensing {} target with {}"
                                       .format(target_info_dict[int(target)][1], reagent_pipette))
             else:
-                self.protocol.comment("Dispensing Master Mix with {}".format(reagent_pipette))
+                self.protocol.comment("\nDispensing Master Mix with {}".format(reagent_pipette))
 
             for well in target_well_list:
                 reagent_tip_height = self.res_tip_height(reagent_well_vol - reagent_aspirated, reagent_well_dia)
@@ -901,7 +914,7 @@ class Utilities:
         if "_1.5ml" in labware:
             cone_vol = 415
 
-        elif "e5ml" in labware:
+        elif "_5000ul_" in labware:
             cone_vol = 1200
 
         return cone_vol
@@ -940,6 +953,7 @@ class Utilities:
         @param right_pipette:
         @return:
         """
+
         # reagent_labware = self._labware_dict[self.args.ReagentSlot]
         sample_destination_labware = self._labware_dict[self.args.PCR_PlateSlot]
         '''
@@ -968,9 +982,10 @@ class Utilities:
 
         # Define the pipette for dispensing the water.
         water_pipette = self.pipette_selection(left_pipette, right_pipette, volume)
-        self.protocol.comment("Distributing water with {} pipette".format(water_pipette))
+        self.protocol.comment("\nDistributing water with {} pipette".format(water_pipette))
         # Use custom distribute command to dispense water.
         self.distribute_reagents(water_pipette, destination_wells, dispense_vol)
+
         self.drop_any_tips()
 
         return water_aspirated
@@ -1016,7 +1031,7 @@ class Utilities:
             max_tip_vol = 295.0
 
         if "P300 Single-Channel GEN2" in str(pipette):
-            print("Distributing Water With P300 Single-Channel GEN2")
+            # print("Distributing Water With P300 Single-Channel GEN2")
             # touch = False
             # r = 0.25
             # s = 10

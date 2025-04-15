@@ -27,13 +27,11 @@
         ]
     ],
     "brand": {
-        "brand": "VWR® Screw-Cap Centrifuge Tube, 5 mL",
-        "brandId": [
-            "10002-738"
-        ]
+        "brand": "Opentrons",
+        "brandId": []
     },
     "metadata": {
-        "displayName": "VWR® Screw-Cap Centrifuge Tube, 5 ML 15 Tube Rack 5000 µL",
+        "displayName": "Opentrons 15 Tube Rack with Diamond® Midi™ Centrifuge Tubes 5 mL",
         "displayCategory": "tubeRack",
         "displayVolumeUnits": "µL",
         "tags": []
@@ -41,143 +39,143 @@
     "dimensions": {
         "xDimension": 127.76,
         "yDimension": 85.48,
-        "zDimension": 87.78
+        "zDimension": 65.71
     },
     "wells": {
         "A1": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 13.88,
             "y": 67.74,
-            "z": 25.19
+            "z": 2.03
         },
         "B1": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 13.88,
             "y": 42.74,
-            "z": 25.19
+            "z": 2.03
         },
         "C1": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 13.88,
             "y": 17.74,
-            "z": 25.19
+            "z": 2.03
         },
         "A2": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 38.88,
             "y": 67.74,
-            "z": 25.19
+            "z": 2.03
         },
         "B2": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 38.88,
             "y": 42.74,
-            "z": 25.19
+            "z": 2.03
         },
         "C2": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 38.88,
             "y": 17.74,
-            "z": 25.19
+            "z": 2.03
         },
         "A3": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 63.88,
             "y": 67.74,
-            "z": 25.19
+            "z": 2.03
         },
         "B3": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 63.88,
             "y": 42.74,
-            "z": 25.19
+            "z": 2.03
         },
         "C3": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 63.88,
             "y": 17.74,
-            "z": 25.19
+            "z": 2.03
         },
         "A4": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 88.88,
             "y": 67.74,
-            "z": 25.19
+            "z": 2.03
         },
         "B4": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 88.88,
             "y": 42.74,
-            "z": 25.19
+            "z": 2.03
         },
         "C4": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 88.88,
             "y": 17.74,
-            "z": 25.19
+            "z": 2.03
         },
         "A5": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 113.88,
             "y": 67.74,
-            "z": 25.19
+            "z": 2.03
         },
         "B5": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 113.88,
             "y": 42.74,
-            "z": 25.19
+            "z": 2.03
         },
         "C5": {
-            "depth": 62.59,
+            "depth": 63.68,
             "totalLiquidVolume": 5000,
             "shape": "circular",
-            "diameter": 15.3,
+            "diameter": 13.7,
             "x": 113.88,
             "y": 17.74,
-            "z": 25.19
+            "z": 2.03
         }
     },
     "groups": [
@@ -210,7 +208,7 @@
         "quirks": [],
         "isTiprack": false,
         "isMagneticModuleCompatible": false,
-        "loadName": "vwrscrewcapcentrifugetube5ml_15_tuberack_5000ul"
+        "loadName": "opentrons_15_tuberack_5000ul_diamond_tubes"
     },
     "namespace": "custom_beta",
     "version": 1,
