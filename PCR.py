@@ -24,7 +24,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.1.0',
+    'protocolName': 'PCR v4.1.1',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -511,7 +511,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
                                               sample_dest_wells, sample_destination_labware, bottom_offset, left_pipette,
                                               right_pipette, water_aspirated, utility)
 
-    utility.drop_any_tips()
+    utility.drop_any_tips([left_pipette, right_pipette])
     return water_aspirated
 
 def sample_dilution(args, sample_source_labware, sample_source_well, sample_vol, diluent_vol, dilution_plate_layout,
@@ -779,6 +779,8 @@ class Utilities:
         sample_destination_labware = labware_dict[self.args.PCR_PlateSlot]
 
         # Dispense reagents into all wells
+        reagent_aspirated = float(self.args.MasterMixPerRxn)
+
         for target in target_well_dict:
             reagent_slot = self.args.ReagentSlot
             if "Illumina_Dual_Indexing" in self.args.Template:
@@ -790,8 +792,6 @@ class Utilities:
 
             target_well_list = target_well_dict[target]
             reagent_source_labware = labware_dict[reagent_slot]
-
-            reagent_aspirated = float(self.args.MasterMixPerRxn)
             reagent_well_dia = reagent_source_labware[reagent_source_well].diameter
 
             reagent_pipette = \
@@ -805,7 +805,6 @@ class Utilities:
 
             for well in target_well_list:
                 reagent_tip_height = self.res_tip_height(reagent_well_vol - reagent_aspirated, reagent_well_dia)
-
                 self.pipette_reagents(reagent_pipette,
                                          reagent_source_labware[reagent_source_well].bottom(reagent_tip_height),
                                          sample_destination_labware[well], float(self.args.MasterMixPerRxn),
@@ -816,11 +815,11 @@ class Utilities:
 
             # Drop any tips the pipettes might have.
             if "Illumina_Dual_Indexing" not in self.args.Template:
-                self.drop_any_tips()
-        self.drop_any_tips()
+                self.drop_any_tips([left_pipette, right_pipette])
+        self.drop_any_tips([left_pipette, right_pipette])
 
-    def drop_any_tips(self):
-        pipettes = [self.left_pipette, self.right_pipette]
+    def drop_any_tips(self, pipettes):
+
         for pipette in pipettes:
             try:
                 if pipette.has_tip:
@@ -890,10 +889,18 @@ class Utilities:
         cone_vol = self.labware_cone_volume(self.args.ReagentSlot)
         bottom_offset = float(self.args.BottomOffset)
         cone_height = (3 * cone_vol / (math.pi * ((well_dia / 2) ** 2)))
-        if res_vol > cone_vol:
-            height = ((res_vol - cone_vol) / (math.pi * ((well_dia / 2) ** 2))) - 5 + cone_height
+
+        if cone_vol > 500:
+            offset = 10
+            cone_offset = 5
         else:
-            height = (3 * res_vol / (math.pi * ((well_dia / 2) ** 2))) - 2
+            offset = 5
+            cone_offset = 2
+
+        if res_vol > cone_vol:
+            height = ((res_vol - cone_vol) / (math.pi * ((well_dia / 2) ** 2))) - offset + cone_height
+        else:
+            height = (3 * res_vol / (math.pi * ((well_dia / 2) ** 2))) - cone_offset
 
         if height < bottom_offset:
             height = bottom_offset
@@ -915,7 +922,7 @@ class Utilities:
             cone_vol = 415
 
         elif "_5000ul_" in labware:
-            cone_vol = 1200
+            cone_vol = 1300
 
         return cone_vol
 
@@ -983,10 +990,11 @@ class Utilities:
         # Define the pipette for dispensing the water.
         water_pipette = self.pipette_selection(left_pipette, right_pipette, volume)
         self.protocol.comment("\nDistributing water with {} pipette".format(water_pipette))
+
         # Use custom distribute command to dispense water.
         self.distribute_reagents(water_pipette, destination_wells, dispense_vol)
 
-        self.drop_any_tips()
+        self.drop_any_tips([left_pipette, right_pipette])
 
         return water_aspirated
 
@@ -1008,6 +1016,7 @@ class Utilities:
         p20_tips = False
         p200_tips = False
         p300_tips = False
+
         if "p300_single_gen2" in self.protocol.params.left_pipette and "P300 Single-Channel GEN2" in str(pipette):
             if any("300" in str(s) for s in self._left_tiprack_list):
                 p300_tips = True
@@ -1085,7 +1094,6 @@ class Utilities:
                 water_res_vol = round(water_res_vol, 1)
                 height = self.res_tip_height(water_res_vol, source_well.diameter)
                 aspirated_vol = tip_vol + disposal_vol
-
                 pipette.aspirate(volume=aspirated_vol, location=source_well.bottom(height))
 
                 for destination_well, dispensed_vol in zip(well_distribution, dispense_list):

@@ -16,7 +16,6 @@ requirements = {"robotType": "OT-2", "apiLevel": "2.20"}
 
 if __name__ == "__main__":
     protocol_file = open('PCR.py')
-    # protocol_file = open('Illumina_Dual_Indexing.py')
     labware_path = "{}{}custom_labware".format(os.getcwd(), os.sep)
     run_log, __bundle__ = simulate(protocol_file, custom_labware_paths=[labware_path])
     run_date = datetime.datetime.today().strftime("%a %b %d %H:%M %Y")
