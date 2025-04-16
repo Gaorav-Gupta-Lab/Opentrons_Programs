@@ -24,7 +24,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.1.1',
+    'protocolName': 'PCR v4.1.2',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -891,7 +891,7 @@ class Utilities:
         cone_height = (3 * cone_vol / (math.pi * ((well_dia / 2) ** 2)))
 
         if cone_vol > 500:
-            offset = 10
+            offset = 11
             cone_offset = 5
         else:
             offset = 5
