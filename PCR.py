@@ -13,6 +13,8 @@ import datetime
 import os
 import csv
 import platform
+from csv import excel
+
 import serial
 import time
 from types import SimpleNamespace
@@ -20,11 +22,11 @@ from contextlib import suppress
 from collections import defaultdict
 from opentrons import protocol_api
 import math
-# import Tool_Box
+import Tool_Box
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.1.2',
+    'protocolName': 'PCR v4.1.3',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -72,7 +74,10 @@ def add_parameters(parameters: protocol_api.Parameters):
                     key = line[0].strip('--')
                     key_value = line[1]
                     if "Target_" in key or "PositiveControl_" in key:
-                        key_value = (line[1], line[2], line[3])
+                        try:
+                            key_value = (line[1], line[2], line[3])
+                        except IndexError:
+                            pass
                     options_dictionary[key] = key_value
                 elif "--" not in line[0] and int(line[0]) < 12:
                     sample_key = line[0], line[1]
@@ -294,9 +299,13 @@ def run(protocol: protocol_api.ProtocolContext):
     # Read targeting parameters into dictionary if not running an Indexing PCR.
     if "Illumina_Dual_Indexing" not in args.Template:
         for i in range(10):
-            target = getattr(args, "Target_{}".format(i + 1))
+            target = getattr(args, "Target_{}".format(i + 1), "")
+            if target:
+                # target_info_dict[i + 1] = target.split("|")
+                target_info_dict[i + 1] = target
 
-            if len(target[0]) > 1:
+            # if len(target[0]) > 1:
+            else:
                 """
                 if not all('' == s or s.isspace() for s in target):
                     target_info_dict[i + 1] = target
@@ -787,7 +796,7 @@ class Utilities:
                 reagent_source_well = self.args.PCR_ReagentWell
                 reagent_well_vol = float(self.args.TotalReagentVolume)
             else:
-                reagent_source_well = target_info_dict[int(target)][0]
+                reagent_source_well = target_info_dict[int(target)][1]
                 reagent_well_vol = float(target_info_dict[int(target)][2])
 
             target_well_list = target_well_dict[target]
@@ -1200,8 +1209,13 @@ class Utilities:
                     if i == 0 and "--" in line[0]:
                         key = line[0].strip('--')
                         key_value = line[1]
-                        if "Target_" in key or "PositiveControl_" in key:
-                            key_value = (line[1], line[2], line[3])
+                        if options_dictionary["Template"] != " Illumina_Dual_Indexing" and "Target_" in key or "PositiveControl_" in key:
+                            try:
+                                key_value = (line[1], line[2], line[3])
+                            except IndexError:
+                                pass
+                            options_dictionary[key] = key_value
+
                         options_dictionary[key] = key_value
                     elif "--" not in line[0] and int(line[0]) < 12:
                         sample_key = line[0], line[1]
