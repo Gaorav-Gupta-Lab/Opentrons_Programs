@@ -13,8 +13,7 @@ import datetime
 import os
 import csv
 import platform
-from csv import excel
-
+from distutils.util import strtobool
 import serial
 import time
 from types import SimpleNamespace
@@ -26,7 +25,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.1.4',
+    'protocolName': 'PCR v4.1.6',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -66,7 +65,7 @@ def add_parameters(parameters: protocol_api.Parameters):
             # Skip any lines that are blank or comments.
             for i in range(7):
                 try:
-                    line[i] = line[i].split("#")[0]  # Strip out end of line comments.
+                    line[i] = line[i].split("#")[0]  # Strip out end-of-line comments.
                 except IndexError:
                     continue
 
@@ -87,7 +86,7 @@ def add_parameters(parameters: protocol_api.Parameters):
 
     args = SimpleNamespace(**options_dictionary)
 
-    # We have limited space for the run_label.  To make sure the label is unique, I use a unix timestamp for the run_date.
+    # We have limited space for the run_label.  To make sure the label is unique, I use the unix timestamp for the run_date.
     run_date = datetime.datetime.today().strftime("%f")
     if "Illumina_Dual_Indexing" in args.Template:
         run_type = "Dual_Indexing"
@@ -204,7 +203,7 @@ def sample_processing(args, sample_parameters, target_info_dict, utility):
             if "Illumina_Dual_Indexing" in args.Template:
                 target_name = target
             else:
-                target_name = target_info_dict[int(target)][1]
+                target_name = target_info_dict[int(target)][0]
 
             for i in range(replicates):
                 well = plate_layout_by_column[dest_well_count]
@@ -279,7 +278,7 @@ def run(protocol: protocol_api.ProtocolContext):
     left_pipette = protocol.load_instrument(protocol.params.left_pipette, 'left', tip_racks=left_tipracks)
     right_pipette = protocol.load_instrument(protocol.params.right_pipette, 'right', tip_racks=right_tipracks)
 
-    # Set the location of the first tip in box.
+    # Set the location of the first tip in the tipbox.
     with suppress(IndexError):
         left_pipette.starting_tip = left_tipracks[0].wells_by_name()[args.LeftPipetteFirstTip.upper()]
     with suppress(IndexError):
@@ -289,14 +288,16 @@ def run(protocol: protocol_api.ProtocolContext):
     if not protocol.is_simulating():
         protocol.set_rail_lights(False)
 
-    if args.UseTemperatureModule == True and not protocol.is_simulating():
+    if args.UseTemperatureModule:
         temp_mod = ColdPlateSlimDriver(protocol)
+        # temp_mod.set_temp(float(args.Temperature))
         temp_mod.quick_temp(float(args.Temperature))
-        # print("Using Temperature Module: ", temp_mod.get_info())
+        protocol.comment("Using Temperature Module")
+        protocol.comment("Setting Temperature Module to {}".format(args.Temperature))
 
     target_info_dict = defaultdict(list)
 
-    # Read targeting parameters into dictionary if not running an Indexing PCR.
+    # Read targeting parameters into the dictionary if not running an Indexing PCR.
     if "Illumina_Dual_Indexing" not in args.Template:
         for i in range(10):
             target = getattr(args, "Target_{}".format(i + 1), "")
@@ -357,8 +358,8 @@ def run(protocol: protocol_api.ProtocolContext):
     if "ddPCR" in args.Template:
         fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
 
-    # If using Temperature Module, hold PCR plate at set temperature until user removes it and closes program.
-    if args.UseTemperatureModule != "FALSE" and not protocol.is_simulating():
+    # If using Temperature Module, hold the PCR plate at set temperature until the user removes it and closes the program.
+    if args.UseTemperatureModule and not protocol.is_simulating():
         protocol.set_rail_lights(True)
         protocol.comment("Program is complete.  Temperature is holding at {}. Click RESUME to exit.".format(args.Temperature))
 
@@ -477,8 +478,8 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
     water_res_well_dia = labware_dict[args.ReagentSlot][args.WaterResWell].diameter
     water_tip_height = utility.res_tip_height(float(args.WaterResVol)-water_aspirated, water_res_well_dia)
 
-    # If the user determines no dilutions are required they can leave that slot blank.  I don't like this approach,
-    # users could leave the information out and dilutions might still be required.
+    # If the user determines no dilutions are required, they can leave that slot blank.  I don't like this approach,
+    # users could leave the information out, and dilutions might still be required.
     if dilution_labware:
         slot = args.DilutionPlateSlot
         # labware_name = slot_dict[args.DilutionPlateSlot]
@@ -502,7 +503,7 @@ def dispense_samples(args, labware_dict, sample_data_dict, sample_parameters, le
         if float(args.PCR_Volume) > 20:
             mix_volume = 17
 
-        # If no dilution is necessary, dispense sample and continue
+        # If no dilution is necessary, dispense the sample and continue
         if diluted_sample_vol == 0:
 
             sample_pipette = \
@@ -575,7 +576,6 @@ class ColdPlateSlimDriver:
     """
     (С) Parhelia Biosciences Corporation 2024-2025
     Class to control their temperature module.
-    @todo Need to find out if the Opentrons built in module will work.
     """
     def __init__(self, protocol_context, temp_mode_number=0):
         self.serial_number = "29533"
@@ -590,12 +590,19 @@ class ColdPlateSlimDriver:
         self.target_temp = 20
         self.protocol = protocol_context
 
-        # check context, skip if simulating Linux
+        self.temp = 20
+        self.max_temp_lag = 0
+        self.heating_rate_deg_per_amin = 100
+        self.cooling_rate_deg_per_min = 100
+
         if protocol_context.is_simulating():
-            # self.protocol.comment("Simulation detected. Initializing Temperature Module in the dummy mode\n")
+            print("Simulation detected\nInitializing in the dummy mode")
             self.serial_object = None
+            self.max_temp_lag = 0
+            self.heating_rate_deg_per_min = 1000
+            self.cooling_rate_deg_per_min = 1000
         else:
-            # self.protocol.comment("Execution mode detected.  Initializing Temperature Module in the run mode\n")
+            print("Execution mode\nInitializing in the run mode")
             self.serial_object = serial.Serial(
                 port=self.device_name,
                 baudrate=self.baudrate,
@@ -605,6 +612,10 @@ class ColdPlateSlimDriver:
                 timeout=self.read_timeout,
                 write_timeout=self.write_timeout,
             )
+
+    @property
+    def temperature(self):
+        return self.get_temp()
 
     def _reset_buffers(self):
         """
@@ -620,18 +631,15 @@ class ColdPlateSlimDriver:
         Worker function
         """
         if self.serial_object is None:
-            return "Program is simulating"
+            return "dummy response"
 
         output_lines = self.serial_object.readlines()
         output_string = "".join(l.decode("utf-8") for l in output_lines)
-
         return output_string
 
     def _send_command(self, my_command):
         """
         Worker function
-        @param my_command:
-        @return:
         """
         SERIAL_ACK = "\r\n"
 
@@ -639,80 +647,45 @@ class ColdPlateSlimDriver:
         command += SERIAL_ACK
 
         if self.serial_object is None:
-            print("Simulating: " + my_command)
-
+            print("sending dummy command: " + my_command)
             return
 
         self.serial_object.write(command.encode())
         self.serial_object.flush()
-
         return self._read_response()
 
     def get_info(self):
         if self.serial_object is None:
-            return "Simulating or no temperature module detected."
-
+            return "dummy info"
         return self._send_command("info")
 
     def get_temp(self):
-        """
-        Get the module temperature.
-        @return:
-        """
         if self.serial_object is None:
-            return self.target_temp
+            return self.temp
+        t = self._send_command("getTempActual")
+        return float(t)
 
-        actual_temp = round(float(self._send_command("getTempActual")), 1)
-        return actual_temp
-
-    def set_temperature(self, my_temp):
-        """
-        Send temperature command to the module.
-        @param my_temp:
-        @return:
-        """
-        if self.serial_object is None and self.protocol.is_simulating():
-            self.target_temp = my_temp
+    def set_temp(self, my_temp):
+        if self.serial_object is None:
+            self.temp = my_temp
             return
-
         temp = float(my_temp) * 10
         temp = int(temp)
         self._send_command(f"setTempTarget{temp:03}")
         self._send_command("tempOn")
 
-    def deactivate(self):
-        """
-        Shutdown the temperature module and close the serial connection.
-        """
-        if self.serial_object is None:
-            self.target_temp = 25
-        else:
-            self._send_command("tempOff")
-            self.serial_object.close()
+    def set_temperature(self, target_temp):
+        self.set_temp_andWait(target_temp)
 
-    @staticmethod
-    def time_to_reach_sample_temp(delta_temp):
-        """
-        Estimate the time in minutes required for module to reach target temperature.
-        @param delta_temp:
-        @return:
-        """
+    def time_to_reach_sample_temp(self, delta_temp):
         x = delta_temp
-
-        if x > 0:
-            time_min = 0.364 + 0.559 * x - 0.0315 * x ** 2 + 1.29E-03 * x ** 3 - 2.46E-05 * x ** 4 + 2.21E-07 * x ** 5 - 7.09E-10 * x ** 6
+        if(x>0):
+            time = 0.364 + 0.559*x -0.0315*x**2 + 1.29E-03*x**3 -2.46E-05*x**4 + 2.21E-07*x**5 -7.09E-10*x**6
         else:
-            time_min = -0.1 - 0.329 * x - 0.00413 * x ** 2 - 0.0000569 * x ** 3 + 0.0000000223 * x ** 4
+            time = -0.1 -0.329*x -0.00413*x**2 -0.0000569*x**3 + 0.0000000223*x**4
+        return time
 
-        return round(time_min, 2)
-
-    def quick_temp(self, temp_target, overshot=3, undershot=2):
-        """
-        Set the module temperature and apply a delay, if needed.
-        @param temp_target:
-        @param overshot:
-        @param undershot:
-        """
+    def quick_temp(self, temp_target, overshot = 10, undershot=3):
         start_temp = self.get_temp()
         delta_temp = temp_target - start_temp
 
@@ -724,25 +697,49 @@ class ColdPlateSlimDriver:
             undershot_temp = delta_temp + undershot
 
         delay_min = self.time_to_reach_sample_temp(undershot_temp)
-        delay_seconds = round((delay_min * 60), 1)
 
-        """
-        if not self.protocol.is_simulating:
-            print("Temp Module is {}C on its way to {}C.".format(self.get_temp(), temp_target, delay_seconds))
-        """
+        self.set_temp(overshot_temp)
+        self.protocol.delay(minutes=delay_min, msg="quick_temp from " + str(start_temp) + " to " + str(temp_target))
+        self.set_temp(temp_target)
 
-        if delay_min > 3:
-            # Set temperature to rapidly cool or heat and delay program to allow temperature change.
-            self.set_temperature(overshot_temp)
-            """
-            print("Delaying program for {} seconds to allow Temp Module to reach {}C."
-                                  .format(delay_seconds, temp_target))
-            """
-            if not self.protocol.is_simulating():
-                time.sleep(delay_seconds)
+    def set_temp_andWait(self, target_temp, timeout_min=30, tolerance=0.5):
+        interval_sec = 10
+        SEC_IN_MIN = 60
 
-        self.set_temperature(temp_target)
+        curr_temp = self.get_temp()
+        self.protocol.comment(
+            f"Setting temperature. Current temp: {curr_temp}\nTarget temp: {target_temp}"
+        )
 
+        self.set_temp(target_temp)
+
+        time_elapsed = 0
+
+        while abs(self.get_temp() - target_temp) > tolerance:
+            self.protocol.comment(
+                f"Waiting for temp to reach target: {target_temp}, actual temp: {self.get_temp()}"
+            )
+            if not self.protocol.is_simulating():  # Skip delay during simulation
+                time.sleep(interval_sec)
+            time_elapsed += interval_sec
+            if time_elapsed > timeout_min * SEC_IN_MIN:
+                raise Exception("Temperature timeout")
+
+        return target_temp
+
+    def temp_off(self):
+        if self.serial_object is None:
+            self.temp = 25
+        else:
+            self._send_command("tempOff")
+
+    def deactivate(self):
+        self.temp_off()
+
+    def __del__(self):
+        self.temp_off()
+        if self.serial_object is not None:
+            self.serial_object.close()
 
 class Utilities:
     def __init__(self, protocol):
@@ -827,8 +824,8 @@ class Utilities:
                 self.drop_any_tips([left_pipette, right_pipette])
         self.drop_any_tips([left_pipette, right_pipette])
 
-    def drop_any_tips(self, pipettes):
-
+    @staticmethod
+    def drop_any_tips(pipettes):
         for pipette in pipettes:
             try:
                 if pipette.has_tip:
@@ -938,7 +935,7 @@ class Utilities:
     @staticmethod
     def pipette_selection(left_pipette, right_pipette, volume):
         """
-        Function to select pipette based on expected volumes.  Will also adjust volume is pipette needs to pick up >1x
+        Function to select a pipette based on expected volumes.  Will also adjust volume is pipette needs to pick up >1x
         @param left_pipette:
         @param right_pipette:
         @param volume:
@@ -1202,7 +1199,7 @@ class Utilities:
                 # Skip any lines that are blank or comments.
                 for i in range(7):
                     try:
-                        line[i] = line[i].split("#")[0]  # Strip out end of line comments.
+                        line[i] = line[i].split("#")[0]  # Strip out end-of-line comments.
                     except IndexError:
                         continue
 
@@ -1224,4 +1221,5 @@ class Utilities:
                     self.sample_dictionary[sample_key] = tmp_line
 
         self.args = SimpleNamespace(**options_dictionary)
+        self.args.UseTemperatureModule = strtobool(str(self.args.UseTemperatureModule))
         return self.sample_dictionary, self.args

@@ -25,7 +25,7 @@ if __name__ == "__main__":
     #outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: PCR.py\n\nStep\tCommand\n" \
     #    .format(metadata['protocolName'], run_date)
 
-    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: Illumina_Dual_Indexing.py\n\nStep\tCommand\n" \
+    outstring = "Opentrons OT-2 Steps for {}.\nDate:  {}\nProgram File: ddPCR.py\n\nStep\tCommand\n" \
         .format(metadata['protocolName'], run_date)
 
     for l in t:
