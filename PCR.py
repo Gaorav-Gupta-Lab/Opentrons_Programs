@@ -25,7 +25,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.1.6',
+    'protocolName': 'PCR v4.2.0',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -289,10 +289,12 @@ def run(protocol: protocol_api.ProtocolContext):
         protocol.set_rail_lights(False)
 
     if args.UseTemperatureModule:
-        temp_mod = ColdPlateSlimDriver(protocol)
-        # temp_mod.set_temp(float(args.Temperature))
-        temp_mod.quick_temp(float(args.Temperature))
         protocol.comment("Using Temperature Module")
+        temp_mod = ColdPlateSlimDriver(protocol)
+        # Parhelia does a set temp to room temperature, then a quick temp to final temperature.
+        #  Doesn't seem like this should be necessary.  They also use int instead of float for the temp.
+        temp_mod.set_temp(20)
+        temp_mod.quick_temp(int(args.Temperature))
         protocol.comment("Setting Temperature Module to {}".format(args.Temperature))
 
     target_info_dict = defaultdict(list)
@@ -573,12 +575,15 @@ def sample_dilution(args, sample_source_labware, sample_source_well, sample_vol,
     return water_aspirated, dilution_well_index
 
 class ColdPlateSlimDriver:
-    """
-    (С) Parhelia Biosciences Corporation 2024-2025
-    Class to control their temperature module.
-    """
-    def __init__(self, protocol_context, temp_mode_number=0):
-        self.serial_number = "29533"
+    def __init__(
+            self,
+            protocol_context,
+            temp_mode_number=0,
+            max_temp_lag=0,
+            heating_rate_deg_per_min=100,
+            cooling_rate_deg_per_min=100,
+    ):
+        self.serial_number = "29517"
         self.device_name = "/dev/ttyUSB" + str(temp_mode_number)
         self.baudrate = 9600
         self.bytesize = serial.EIGHTBITS
@@ -587,22 +592,24 @@ class ColdPlateSlimDriver:
         self.read_timeout = 2
         self.write_timeout = 2
         self.height = 45
-        self.target_temp = 20
-        self.protocol = protocol_context
 
         self.temp = 20
-        self.max_temp_lag = 0
-        self.heating_rate_deg_per_amin = 100
-        self.cooling_rate_deg_per_min = 100
+        self.max_temp_lag = max_temp_lag
+        self.heating_rate_deg_per_amin = heating_rate_deg_per_min
+        self.cooling_rate_deg_per_min = cooling_rate_deg_per_min
+        self.protocol = protocol_context
 
+        # check context, skip if simulating Linux
         if protocol_context.is_simulating():
-            print("Simulation detected\nInitializing in the dummy mode")
+            print("simulation detected")
+            print("Initializing in the dummy mode")
             self.serial_object = None
             self.max_temp_lag = 0
             self.heating_rate_deg_per_min = 1000
             self.cooling_rate_deg_per_min = 1000
         else:
-            print("Execution mode\nInitializing in the run mode")
+            print("execution mode")
+            print("Initializing in the real deal mode")
             self.serial_object = serial.Serial(
                 port=self.device_name,
                 baudrate=self.baudrate,
@@ -699,6 +706,9 @@ class ColdPlateSlimDriver:
         delay_min = self.time_to_reach_sample_temp(undershot_temp)
 
         self.set_temp(overshot_temp)
+        testmode = False
+        if testmode:
+            delay_min = 0.1
         self.protocol.delay(minutes=delay_min, msg="quick_temp from " + str(start_temp) + " to " + str(temp_target))
         self.set_temp(temp_target)
 
@@ -738,8 +748,9 @@ class ColdPlateSlimDriver:
 
     def __del__(self):
         self.temp_off()
-        if self.serial_object is not None:
+        if not self.protocol.is_simulating():
             self.serial_object.close()
+        # self.serial_object.close()
 
 class Utilities:
     def __init__(self, protocol):
