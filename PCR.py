@@ -25,7 +25,7 @@ import math
 
 # metadata
 metadata = {
-    'protocolName': 'PCR v4.2.0',
+    'protocolName': 'PCR v4.3.5',
     'author': 'Dennis Simpson <dennis@email.unc.edu>',
     'description': 'Setup a ddPCR, Generic PCR, or Dual Indexing PCR'
     }
@@ -358,7 +358,8 @@ def run(protocol: protocol_api.ProtocolContext):
     water_aspirated = dispense_samples(args, labware, sample_data_dict, sample_parameters, left_pipette,
                                        right_pipette, water_aspirated, utility, protocol)
     if "ddPCR" in args.Template:
-        fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
+        # fill_empty_wells(args, used_wells, water_aspirated, labware, left_pipette, right_pipette, utility)
+        fill_empty_wells(args, used_wells, labware, left_pipette, right_pipette, utility)
 
     # If using Temperature Module, hold the PCR plate at set temperature until the user removes it and closes the program.
     if args.UseTemperatureModule and not protocol.is_simulating():
@@ -419,7 +420,7 @@ def dispense_indexing_primers(args, protocol, utility, left_pipette, right_pipet
                                  touch=True)
 
 
-def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipette, right_pipette, utility):
+def fill_empty_wells(args, used_wells, labware_dict, left_pipette, right_pipette, utility):
     """
     This will fill the remaining wells in a column with water.  Needed to for the droplet generator.
     """
@@ -430,7 +431,7 @@ def fill_empty_wells(args, used_wells, water_aspirated, labware_dict, left_pipet
     row_list = ["A", "B", "C", "D", "E", "F", "G", "H"]
     row_index = row_list.index(row)
     wells_remaining = len(row_list)-row_index-1
-
+    water_aspirated = 25
     if wells_remaining > 0:
         sample_destination_labware = labware_dict[args.PCR_PlateSlot]
         reagent_labware = labware_dict[args.ReagentSlot]
@@ -815,8 +816,10 @@ class Utilities:
                 self.pipette_selection(left_pipette, right_pipette, float(self.args.MasterMixPerRxn))
 
             if "Illumina_Dual_Indexing" not in self.args.Template:
-                self.protocol.comment("\nDispensing {} target with {}"
-                                      .format(target_info_dict[int(target)][1], reagent_pipette))
+                #  If there is no reagent to pipette, then there should be no log entry.
+                if target_info_dict[int(target)][1] == "0.0":
+                    self.protocol.comment("\nDispensing {} target with {}"
+                                          .format(target_info_dict[int(target)][1], reagent_pipette))
             else:
                 self.protocol.comment("\nDispensing Master Mix with {}".format(reagent_pipette))
 
@@ -1111,10 +1114,12 @@ class Utilities:
                 water_res_vol = round(water_res_vol, 1)
                 height = self.res_tip_height(water_res_vol, source_well.diameter)
                 aspirated_vol = tip_vol + disposal_vol
+
                 pipette.aspirate(volume=aspirated_vol, location=source_well.bottom(height))
 
                 for destination_well, dispensed_vol in zip(well_distribution, dispense_list):
-                    pipette.dispense(volume=dispensed_vol, location=destination_well)
+                    if dispensed_vol > 0:
+                        pipette.dispense(volume=dispensed_vol, location=destination_well)
 
                 pipette.blow_out(source_well)
                 water_res_vol -= tip_vol
